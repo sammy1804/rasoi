@@ -20,7 +20,7 @@ export function Sheet({ open, onOpenChange, title, description, children, footer
   return (
     <Drawer.Root open={open} onOpenChange={onOpenChange} repositionInputs={false}>
       <Drawer.Portal>
-        <Drawer.Overlay className="fixed inset-0 z-40 bg-ink/30 backdrop-blur-[2px]" />
+        <Drawer.Overlay className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[2px]" />
         <Drawer.Content
           className={cn(
             'fixed inset-x-0 bottom-0 z-50 mx-auto flex max-h-[92dvh] w-full max-w-md flex-col rounded-t-3xl bg-paper shadow-lift outline-none',

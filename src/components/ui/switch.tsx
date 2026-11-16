@@ -9,7 +9,7 @@ export function Switch({ checked, onChange, label, className }: { checked: boole
       aria-checked={checked}
       aria-label={label}
       onClick={() => onChange(!checked)}
-      className={cn('relative h-7 w-12 shrink-0 rounded-full transition-colors focus-ring', checked ? 'bg-clay' : 'bg-line', className)}
+      className={cn('relative h-7 w-12 shrink-0 rounded-full transition-colors focus-ring', checked ? 'bg-clay' : 'bg-ink-mute/40', className)}
     >
       <motion.span
         className="absolute top-1 h-5 w-5 rounded-full bg-white shadow-soft"

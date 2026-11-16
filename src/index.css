@@ -15,9 +15,51 @@
   --clay-deep: 140 66 38;
   --m-breakfast: 214 154 52; /* turmeric */
   --m-lunch: 122 140 92;     /* curry leaf */
+  --m-lunch-text: 78 91 51;
   --m-snack: 198 106 120;    /* rose */
   --m-dinner: 98 98 150;     /* dusk */
+  --water: 91 135 166;
+  --water-fill: 127 166 194;
+  --danger: 162 59 34;
+  --danger-bg: 247 227 222;
+  --h0-bg: 239 217 203; --h0-fg: 140 66 38;  --h0-solid: 184 92 56;
+  --h1-bg: 220 224 238; --h1-fg: 63 74 122;  --h1-solid: 98 98 154;
+  --h2-bg: 227 230 214; --h2-fg: 78 91 51;   --h2-solid: 122 140 92;
+  --on-clay: 255 255 255;
+  --shadow: 31 29 26;
   color-scheme: light;
+}
+
+/* Dark kitchen at night: same warmth, lower glare. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --paper: 23 21 19; --card: 33 30 27; --sand: 44 40 36; --line: 58 53 47;
+    --ink: 242 236 227; --ink-soft: 200 192 181; --ink-mute: 146 138 127;
+    --clay: 222 128 92; --clay-soft: 68 40 30; --clay-deep: 244 168 136;
+    --m-breakfast: 226 172 80; --m-lunch: 152 172 120; --m-lunch-text: 186 204 150; --m-snack: 220 134 148; --m-dinner: 146 146 204;
+    --water: 140 180 208; --water-fill: 110 150 180;
+    --danger: 244 150 126; --danger-bg: 72 34 26;
+    --h0-bg: 76 46 34; --h0-fg: 240 176 146; --h0-solid: 222 128 92;
+    --h1-bg: 44 48 76; --h1-fg: 176 184 236; --h1-solid: 146 146 204;
+    --h2-bg: 50 56 38; --h2-fg: 190 206 152; --h2-solid: 152 172 120;
+    --on-clay: 23 21 19;
+    --shadow: 0 0 0;
+    color-scheme: dark;
+  }
+}
+:root[data-theme='dark'] {
+  --paper: 23 21 19; --card: 33 30 27; --sand: 44 40 36; --line: 58 53 47;
+  --ink: 242 236 227; --ink-soft: 200 192 181; --ink-mute: 146 138 127;
+  --clay: 222 128 92; --clay-soft: 68 40 30; --clay-deep: 244 168 136;
+  --m-breakfast: 226 172 80; --m-lunch: 152 172 120; --m-lunch-text: 186 204 150; --m-snack: 220 134 148; --m-dinner: 146 146 204;
+  --water: 140 180 208; --water-fill: 110 150 180;
+  --danger: 244 150 126; --danger-bg: 72 34 26;
+  --h0-bg: 76 46 34; --h0-fg: 240 176 146; --h0-solid: 222 128 92;
+  --h1-bg: 44 48 76; --h1-fg: 176 184 236; --h1-solid: 146 146 204;
+  --h2-bg: 50 56 38; --h2-fg: 190 206 152; --h2-solid: 152 172 120;
+  --on-clay: 23 21 19;
+  --shadow: 0 0 0;
+  color-scheme: dark;
 }
 
 html, body, #root { height: 100%; }

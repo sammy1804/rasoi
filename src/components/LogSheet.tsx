@@ -391,7 +391,7 @@ export function MiniStatus({ s }: { s: S }) {
     >
       {s === 'eaten' && (
         <svg viewBox="0 0 24 24" className="h-2.5 w-2.5">
-          <path d="M5 12.5l4.2 4.2L19 7" fill="none" stroke="white" strokeWidth={4} strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M5 12.5l4.2 4.2L19 7" fill="none" stroke="rgb(var(--paper))" strokeWidth={4} strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       )}
       {s === 'partial' && <span className="absolute inset-y-0 left-0 w-1/2 bg-ink" />}

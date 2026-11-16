@@ -87,7 +87,7 @@ export function WeekScreen() {
                   <span className="text-[13px] text-ink-mute">{fmtShortDate(d)}</span>
                 </span>
                 {isToday ? (
-                  <span className="rounded-full bg-clay px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">Today</span>
+                  <span className="rounded-full bg-clay px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-clay-on">Today</span>
                 ) : (
                   <span className="text-[12px] font-semibold text-ink-mute">Open day <ChevronRight size={12} className="inline" /></span>
                 )}

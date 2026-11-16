@@ -4,13 +4,22 @@ A shared 7-day meal planner and food tracker for two people who live together. Y
 
 > One kitchen. One meal plan. Your own goals.
 
+## Open it on your phone
+
+**https://claude.ai/artifact/TeKtzRJc1CdJRGS2xTwDfK** (private to you until you share it from the page's Share menu).
+
+It's a single self-contained page built by `npm run build:mobile`. Your data stays on that phone. Light and dark themes follow your phone's setting.
+
 ## Run it
 
 ```bash
 npm install
 npm run dev        # http://localhost:5173
 npm run build      # typecheck + production build in dist/
+npm run smoke      # build the phone page + run the end-to-end checks on an emulated iPhone
 ```
+
+`npm run build` also produces an installable home-screen web app (manifest + icons) if you deploy `dist/` to Vercel or Netlify.
 
 Built with React 18, TypeScript, Tailwind CSS, shadcn/ui-style primitives (cva + `cn`, a vaul/Radix bottom-sheet "Drawer"), framer-motion and lucide icons.
 

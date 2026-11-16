@@ -119,7 +119,7 @@ export function ProgressScreen() {
                   <h2 className="mt-4 text-[13px] font-semibold uppercase tracking-[0.1em] text-ink-mute">Vegetables this week</h2>
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     {r.veg.map((v) => (
-                      <span key={v} className="rounded-full bg-meal-lunch/10 px-2.5 py-1 text-[12px] font-semibold capitalize text-[#4E5B33]">
+                      <span key={v} className="rounded-full bg-meal-lunch/10 px-2.5 py-1 text-[12px] font-semibold capitalize text-meal-lunch-text">
                         {v}
                       </span>
                     ))}

@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion'
-import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation, useParams } from 'react-router-dom'
+import { BrowserRouter, MemoryRouter, Navigate, Outlet, Route, Routes, useLocation, useParams } from 'react-router-dom'
 import { DayProvider } from '@/app/DayContext'
+import { IS_MOBILE_PAGE } from '@/app/target'
 import { BottomNav } from '@/components/BottomNav'
 import { ToastProvider } from '@/components/Toast'
 import { useSession } from '@/hooks/useSession'
@@ -38,9 +39,12 @@ function JoinRoute() {
   return <JoinGate code={(code ?? '').toUpperCase()} />
 }
 
+// The hosted mobile page can't use URL paths, so it routes in memory.
+const Router = IS_MOBILE_PAGE ? MemoryRouter : BrowserRouter
+
 export function App() {
   return (
-    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+    <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <ToastProvider>
         <DayProvider>
           <Routes>
@@ -59,6 +63,6 @@ export function App() {
           </Routes>
         </DayProvider>
       </ToastProvider>
-    </BrowserRouter>
+    </Router>
   )
 }

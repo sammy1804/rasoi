@@ -6,6 +6,13 @@ import { Avatar } from '@/components/Avatar'
 import { useToast } from '@/components/Toast'
 import { Button } from '@/components/ui/button'
 import { useSession } from '@/hooks/useSession'
+import { IS_MOBILE_PAGE } from '@/app/target'
+
+/** What "Copy" puts on the clipboard: a link on the web build, a code message on the mobile page. */
+export function inviteText(code: string, householdName: string) {
+  if (IS_MOBILE_PAGE) return `Join ${householdName} on Rasoi: open the app, tap “I have an invite” and enter code ${code}`
+  return inviteLink(code)
+}
 
 export function inviteLink(code: string) {
   return `${window.location.origin}/join/${code}`
@@ -43,9 +50,9 @@ export function InviteScreen() {
   const link = inviteLink(household.code)
 
   const copy = async () => {
-    const ok = await copyText(link)
+    const ok = await copyText(inviteText(household.code, household.name))
     setCopied(ok)
-    toast({ text: ok ? 'Invite link copied' : 'Couldn’t copy — long-press the link instead' })
+    toast({ text: ok ? (IS_MOBILE_PAGE ? 'Invite copied — paste it to them' : 'Invite link copied') : 'Couldn’t copy — long-press the code instead' })
     setTimeout(() => setCopied(false), 1800)
   }
   const share = async () => {
@@ -55,7 +62,7 @@ export function InviteScreen() {
       /* cancelled */
     }
   }
-  const canShare = typeof navigator !== 'undefined' && 'share' in navigator
+  const canShare = !IS_MOBILE_PAGE && typeof navigator !== 'undefined' && 'share' in navigator
 
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col px-6 pb-[max(24px,env(safe-area-inset-bottom))] pt-safe">
@@ -74,7 +81,9 @@ export function InviteScreen() {
         <p className="mt-2 text-[15px] text-ink-soft">
           {partner
             ? `${nameOf(partner.userId)} has joined ${household.name}. You’ll both see the same meals — each with your own portions.`
-            : 'Send them this link. They’ll set up their own goals and see the same meal plan — no need to recreate anything.'}
+            : IS_MOBILE_PAGE
+              ? 'Send them this code. They tap “I have an invite”, set up their own goals and see the same meal plan — no need to recreate anything.'
+              : 'Send them this link. They’ll set up their own goals and see the same meal plan — no need to recreate anything.'}
         </p>
 
         <div className="mt-8 rounded-3xl border border-line bg-card p-5 shadow-soft">
@@ -82,9 +91,11 @@ export function InviteScreen() {
           <p className="mt-1 font-mono text-[40px] font-semibold tracking-[0.18em] text-ink" data-testid="join-code">
             {household.code}
           </p>
-          <div className="mt-3 truncate rounded-xl bg-sand px-3 py-2.5 font-mono text-[13px] text-ink-soft" data-testid="invite-link">
-            {link.replace(/^https?:\/\//, '')}
-          </div>
+          {!IS_MOBILE_PAGE && (
+            <div className="mt-3 truncate rounded-xl bg-sand px-3 py-2.5 font-mono text-[13px] text-ink-soft" data-testid="invite-link">
+              {link.replace(/^https?:\/\//, '')}
+            </div>
+          )}
           <div className="mt-4 flex gap-2">
             <Button block onClick={copy} variant="primary">
               <AnimatePresence mode="wait" initial={false}>
@@ -98,7 +109,7 @@ export function InviteScreen() {
                   </motion.span>
                 )}
               </AnimatePresence>
-              {copied ? 'Copied' : 'Copy invite link'}
+              {copied ? 'Copied' : IS_MOBILE_PAGE ? 'Copy invite' : 'Copy invite link'}
             </Button>
             {canShare && (
               <Button variant="outline" size="icon" className="h-11 w-11" onClick={share} aria-label="Share invite">
@@ -135,12 +146,20 @@ export function InviteScreen() {
 
         <details className="mt-4 rounded-2xl px-1 text-[13px] text-ink-mute">
           <summary className="cursor-pointer select-none py-1 font-semibold text-ink-soft">Testing on one device?</summary>
-          <p className="mt-1 leading-relaxed">
-            This prototype keeps data in this browser. Open the invite link in a <b>new tab</b> to onboard the second person — both tabs stay in sync. To share across two phones, connect the Supabase backend (see README).
-          </p>
-          <a href={link} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1.5 font-semibold text-clay">
-            Open invite in a new tab <ExternalLink size={14} />
-          </a>
+          {IS_MOBILE_PAGE ? (
+            <p className="mt-1 leading-relaxed">
+              This version keeps your data on this phone. To try the second person here, go to <b>Profile → Sign out on this device</b>, then tap <b>I have an invite</b> and enter the code. Switch back any time from Profile.
+            </p>
+          ) : (
+            <>
+              <p className="mt-1 leading-relaxed">
+                This prototype keeps data in this browser. Open the invite link in a <b>new tab</b> to onboard the second person — both tabs stay in sync. To share across two phones, connect the Supabase backend (see README).
+              </p>
+              <a href={link} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1.5 font-semibold text-clay">
+                Open invite in a new tab <ExternalLink size={14} />
+              </a>
+            </>
+          )}
         </details>
 
         <div className="mt-auto pt-8">

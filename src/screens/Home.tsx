@@ -241,7 +241,7 @@ export function HomeScreen() {
             )}
             {activeTip === 'firstTick' && (
               <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="mt-3 flex items-center gap-2 rounded-2xl bg-clay-soft px-4 py-3 text-[14px] text-clay-deep">
-                <span className="grid h-6 w-6 place-items-center rounded-full bg-clay text-white">
+                <span className="grid h-6 w-6 place-items-center rounded-full bg-clay text-clay-on">
                   <Check size={14} strokeWidth={3} />
                 </span>
                 <span className="flex-1 font-semibold">Tick something you’ve already eaten today</span>
@@ -583,12 +583,12 @@ function Water({ member, date, glasses }: { member: HouseholdMember; date: ISODa
   const target = member.profile.waterTargetGlasses
   return (
     <div className="mt-2 flex items-center gap-3 rounded-2xl bg-card px-3.5 py-2.5">
-      <Droplet size={18} className="text-[#5B87A6]" />
+      <Droplet size={18} className="text-water" />
       <div className="min-w-0 flex-1">
         <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-mute">Water · optional</p>
         <div className="mt-1 flex gap-[3px]" aria-hidden>
           {Array.from({ length: Math.max(target, glasses) }).map((_, i) => (
-            <motion.span key={i} className="h-2 flex-1 rounded-full" initial={false} animate={{ backgroundColor: i < glasses ? '#7FA6C2' : 'rgb(232 225 213)' }} />
+            <span key={i} className={cn('h-2 flex-1 rounded-full transition-colors duration-300', i < glasses ? 'bg-water-fill' : 'bg-line')} />
           ))}
         </div>
       </div>

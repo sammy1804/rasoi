@@ -16,7 +16,8 @@ import type { Diet, Goal, PortionStyle, Profile } from '@/data/types'
 import { useSession } from '@/hooks/useSession'
 import { todayISO } from '@/lib/dates'
 import { PORTION_LABEL, suggestTargets } from '@/lib/nutrition'
-import { copyText, inviteLink } from './Invite'
+import { copyText, inviteText } from './Invite'
+import { IS_MOBILE_PAGE } from '@/app/target'
 import { DislikePicker } from './Onboarding'
 
 const GOAL_LABEL: Record<Goal, string> = { lose: 'Lose weight gradually', maintain: 'Maintain', gain: 'Gain weight gradually' }
@@ -117,11 +118,11 @@ export function ProfileScreen() {
               size="sm"
               variant="secondary"
               onClick={async () => {
-                const ok = await copyText(inviteLink(household!.code))
-                toast({ text: ok ? 'Invite link copied' : 'Couldn’t copy the link' })
+                const ok = await copyText(inviteText(household!.code, household!.name))
+                toast({ text: ok ? 'Invite copied' : 'Couldn’t copy — share the code instead' })
               }}
             >
-              <Copy size={14} /> Copy link
+              <Copy size={14} /> {IS_MOBILE_PAGE ? 'Copy invite' : 'Copy link'}
             </Button>
           </div>
         </div>
@@ -268,9 +269,9 @@ function ToggleRow({ label, sub, checked, onChange }: { label: string; sub?: str
 function ActionRow({ icon, label, sub, onClick, danger }: { icon: ReactNode; label: string; sub?: string; onClick: () => void; danger?: boolean }) {
   return (
     <button onClick={onClick} className="flex w-full items-center gap-3 border-t border-line/60 px-4 py-3 text-left transition first:border-t-0 hover:bg-sand/40">
-      <span className={danger ? 'text-[#A23B22]' : 'text-ink-soft'}>{icon}</span>
+      <span className={danger ? 'text-danger' : 'text-ink-soft'}>{icon}</span>
       <span className="min-w-0 flex-1">
-        <span className={`block text-[15px] font-semibold ${danger ? 'text-[#A23B22]' : ''}`}>{label}</span>
+        <span className={`block text-[15px] font-semibold ${danger ? 'text-danger' : ''}`}>{label}</span>
         {sub && <span className="block text-[13px] text-ink-mute">{sub}</span>}
       </span>
       <ChevronRight size={16} className="text-ink-mute" />

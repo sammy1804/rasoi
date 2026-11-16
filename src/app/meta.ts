@@ -17,8 +17,8 @@ export function slotForNow(): MealSlot {
 
 /** Person identity colours — kept muted so the one accent stays special. */
 export const HUES = [
-  { bg: 'bg-[#EFD9CB]', text: 'text-[#8C4226]', ring: 'ring-[#B85C38]', solid: '#B85C38' },
-  { bg: 'bg-[#DCE0EE]', text: 'text-[#3F4A7A]', ring: 'ring-[#62629A]', solid: '#62629A' },
-  { bg: 'bg-[#E3E6D6]', text: 'text-[#4E5B33]', ring: 'ring-[#7A8C5C]', solid: '#7A8C5C' },
+  { bg: 'bg-hue0-bg', text: 'text-hue0-fg', ring: 'ring-hue0-solid', solid: 'rgb(var(--h0-solid))' },
+  { bg: 'bg-hue1-bg', text: 'text-hue1-fg', ring: 'ring-hue1-solid', solid: 'rgb(var(--h1-solid))' },
+  { bg: 'bg-hue2-bg', text: 'text-hue2-fg', ring: 'ring-hue2-solid', solid: 'rgb(var(--h2-solid))' },
 ]
 export const hueOf = (i: number) => HUES[i % HUES.length]

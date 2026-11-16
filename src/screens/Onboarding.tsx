@@ -186,10 +186,10 @@ export function Onboarding({ initialCode }: { initialCode?: string }) {
             </button>
             <div className="flex flex-1 items-center justify-center gap-1.5" aria-hidden>
               {steps.slice(1).map((s, i) => (
-                <motion.span
+                <span
                   key={s}
-                  className="h-1.5 rounded-full"
-                  animate={{ width: i + 1 === idx ? 22 : 6, backgroundColor: i + 1 <= idx ? 'rgb(31 29 26)' : 'rgb(232 225 213)' }}
+                  className={cn('h-1.5 rounded-full transition-all duration-300', i + 1 <= idx ? 'bg-ink' : 'bg-line')}
+                  style={{ width: i + 1 === idx ? 22 : 6 }}
                 />
               ))}
             </div>
