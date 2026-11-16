@@ -1,0 +1,262 @@
+/**
+ * Rasoi data model.
+ *
+ * These entities map 1:1 to the tables in `supabase/schema.sql`. The local
+ * prototype keeps them in a single normalised `DB` object persisted to
+ * localStorage (see `store.ts`); a Supabase adapter would read/write the same
+ * shapes row-by-row.
+ */
+
+export type ID = string
+export type ISODate = string // 'YYYY-MM-DD'
+
+export type MealSlot = 'breakfast' | 'lunch' | 'snack' | 'dinner'
+export const MEAL_SLOTS: MealSlot[] = ['breakfast', 'lunch', 'snack', 'dinner']
+
+/** 0 = Monday … 6 = Sunday */
+export type Weekday = 0 | 1 | 2 | 3 | 4 | 5 | 6
+
+export type Goal = 'lose' | 'maintain' | 'gain'
+export type Activity = 'light' | 'moderate' | 'active'
+export type Diet = 'veg' | 'egg-whites' | 'eggs' | 'non-veg'
+/** How a member's portions are scaled from the shared household meal. */
+export type PortionStyle = 'lighter' | 'standard' | 'hearty'
+
+export interface User {
+  id: ID
+  name: string
+  createdAt: string
+}
+
+export interface Household {
+  id: ID
+  name: string
+  /** Short, human-friendly join code, e.g. 7XK92A */
+  code: string
+  createdBy: ID
+  createdAt: string
+}
+
+export interface SharingSettings {
+  fullLog: boolean
+  calories: boolean
+  protein: boolean
+  mealCompletion: boolean
+}
+
+export interface BreakfastRamp {
+  enabled: boolean
+  /** % of full breakfast in week 1 */
+  startPct: number
+  /** % added each week until 100 */
+  weeklyStepPct: number
+  startedOn: ISODate
+}
+
+export interface Profile {
+  age?: number
+  /** only used for the calorie estimate formula */
+  sex: 'female' | 'male'
+  heightCm: number
+  weightKg: number
+  goal: Goal
+  activity: Activity
+  activityNote?: string
+  diet: Diet
+  dislikes: string[]
+  calorieTarget: number
+  proteinMin: number
+  proteinTarget: number
+  portionStyle: PortionStyle
+  breakfastRamp: BreakfastRamp
+  trackWater: boolean
+  waterTargetGlasses: number
+}
+
+export interface HouseholdMember {
+  id: ID
+  householdId: ID
+  userId: ID
+  role: 'owner' | 'member'
+  joinedAt: string
+  /** Visual identity chip colour index */
+  hue: number
+  profile: Profile
+  sharing: SharingSettings
+  /** First-run coach marks already seen */
+  tips: Record<string, boolean>
+}
+
+export type FoodCategory =
+  | 'breakfast'
+  | 'lunch'
+  | 'dinner'
+  | 'snack'
+  | 'drink'
+  | 'fruit'
+  | 'basic'
+  | 'homemade'
+  | 'custom'
+
+export interface Nutrients {
+  kcal: number
+  protein: number
+  carbs: number
+  fat: number
+  fibre: number
+}
+
+export interface FoodUnit {
+  /** e.g. 'piece', 'cup', 'katori', 'tbsp', 'g', 'ml' */
+  name: string
+  /** weight (or ml) of ONE unit; for 'g'/'ml' this is 1 */
+  grams: number
+  /** optional friendly label e.g. 'katori (~150 g)' */
+  label?: string
+}
+
+export interface Food {
+  id: ID
+  name: string
+  category: FoodCategory
+  /** Nutrition per 100 g (or 100 ml). Always an estimate. */
+  per100: Nutrients
+  units: FoodUnit[]
+  defaultUnit: string
+  defaultAmount: number
+  /** fruit/veg servings per 100 g (1 serving ≈ 80 g) */
+  fvPer100?: number
+  /** vegetables / fruits it contains, for variety tracking */
+  produce?: string[]
+  /** keywords to help search */
+  tags?: string[]
+  /** contains egg yolk / meat etc. — used to respect diet */
+  contains?: ('egg-yolk' | 'egg-white' | 'meat' | 'dairy')[]
+  /** set for user-created foods */
+  householdId?: ID
+  createdBy?: ID
+  recipeId?: ID
+  /** soft-deleted custom foods stay resolvable for old logs */
+  archived?: boolean
+}
+
+export interface RecipeIngredient {
+  foodId: ID
+  amount: number
+  unit: string
+}
+
+export interface Recipe {
+  id: ID
+  householdId: ID
+  createdBy: ID
+  name: string
+  servings: number
+  ingredients: RecipeIngredient[]
+  /** the generated Food row that users log */
+  foodId: ID
+  createdAt: string
+}
+
+/** Portion for one style, in the food's units. */
+export interface Portion {
+  amount: number
+  /** use a different food for this style (e.g. high-protein dahi instead of curd) */
+  foodId?: ID
+  unit?: string
+  /** human hint e.g. '80–100 g paneer' */
+  hint?: string
+  /** range shown to the user e.g. [1, 2] chapatis */
+  range?: [number, number]
+}
+
+export interface PlanItemSpec {
+  foodId: ID
+  lighter: Portion
+  hearty: Portion
+  /** if set, standard portion; otherwise it is interpolated */
+  standard?: Portion
+}
+
+export interface MealItem extends PlanItemSpec {
+  id: ID
+  /** alternatives the person can swap to, e.g. Rice OR chapati */
+  alts?: PlanItemSpec[]
+  optional?: boolean
+  /** only shown to members with this portion style (e.g. calorie-dense add-ons) */
+  onlyFor?: PortionStyle
+}
+
+export interface Meal {
+  id: ID
+  mealPlanId: ID
+  day: Weekday
+  slot: MealSlot
+  items: MealItem[]
+}
+
+export interface MealPlan {
+  id: ID
+  householdId: ID
+  name: string
+  createdAt: string
+}
+
+export type LogStatus = 'eaten' | 'partial' | 'skipped'
+
+export interface FoodLog {
+  id: ID
+  householdId: ID
+  userId: ID
+  date: ISODate
+  slot: MealSlot
+  /** set when the entry ticks off a planned item */
+  mealItemId?: ID
+  foodId: ID
+  status: LogStatus
+  /** the quantity the person actually had (before `fraction`) */
+  amount: number
+  unit: string
+  /** 0..1 — for 'partial' */
+  fraction: number
+  /** nutrients snapshot at time of logging (estimate) */
+  nutrients: Nutrients
+  createdAt: string
+  updatedAt: string
+}
+
+export interface WeightLog {
+  id: ID
+  userId: ID
+  date: ISODate
+  kg: number
+}
+
+export interface WaterLog {
+  userId: ID
+  date: ISODate
+  glasses: number
+}
+
+/** Which alternative a person picked for a planned item on a day. */
+export interface ItemChoice {
+  userId: ID
+  date: ISODate
+  mealItemId: ID
+  altIndex: number // -1 = primary
+}
+
+export interface DB {
+  version: number
+  users: Record<ID, User>
+  households: Record<ID, Household>
+  members: Record<ID, HouseholdMember>
+  mealPlans: Record<ID, MealPlan>
+  meals: Record<ID, Meal>
+  foods: Record<ID, Food>
+  recipes: Record<ID, Recipe>
+  foodLogs: Record<ID, FoodLog>
+  weightLogs: Record<ID, WeightLog>
+  waterLogs: Record<string, WaterLog>
+  choices: Record<string, ItemChoice>
+}

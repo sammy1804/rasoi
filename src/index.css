@@ -1,0 +1,47 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --paper: 250 247 242;      /* warm off-white */
+  --card: 255 254 251;
+  --sand: 243 238 229;
+  --line: 232 225 213;
+  --ink: 31 29 26;           /* charcoal */
+  --ink-soft: 92 86 78;
+  --ink-mute: 148 140 128;
+  --clay: 184 92 56;         /* the one muted accent: terracotta */
+  --clay-soft: 246 230 220;
+  --clay-deep: 140 66 38;
+  --m-breakfast: 214 154 52; /* turmeric */
+  --m-lunch: 122 140 92;     /* curry leaf */
+  --m-snack: 198 106 120;    /* rose */
+  --m-dinner: 98 98 150;     /* dusk */
+  color-scheme: light;
+}
+
+html, body, #root { height: 100%; }
+body {
+  @apply bg-paper text-ink font-sans antialiased;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+  font-feature-settings: 'ss01', 'cv11';
+}
+button { -webkit-user-select: none; user-select: none; }
+input, textarea, select { font-size: 16px; } /* prevents iOS zoom */
+input[type='number']::-webkit-outer-spin-button,
+input[type='number']::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+input[type='number'] { -moz-appearance: textfield; }
+
+@layer utilities {
+  .tabular { font-variant-numeric: tabular-nums; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { scrollbar-width: none; }
+  .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+  .pt-safe { padding-top: env(safe-area-inset-top); }
+  .focus-ring { @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-clay/40 focus-visible:ring-offset-2 focus-visible:ring-offset-paper; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
