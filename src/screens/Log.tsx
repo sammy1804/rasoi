@@ -5,6 +5,8 @@ import { useNavigate } from 'react-router-dom'
 import { useDay } from '@/app/DayContext'
 import { SLOT_META } from '@/app/meta'
 import { AddFoodSheet } from '@/components/AddFoodSheet'
+import { SayItSheet } from '@/components/SayItSheet'
+import { getPhoto } from '@/data/photos'
 import { DayStrip } from '@/components/DayStrip'
 import { LogSheet, type LogTarget } from '@/components/LogSheet'
 import { useToast } from '@/components/Toast'
@@ -28,6 +30,7 @@ export function LogScreen() {
   const toast = useToast()
   const [target, setTarget] = useState<LogTarget | null>(null)
   const [adding, setAdding] = useState(false)
+  const [say, setSay] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState<Food | null>(null)
   const foods = allFoods(db)
   const view = useMemo(() => dayView(db, me, date), [db, me, date])
@@ -95,7 +98,7 @@ export function LogScreen() {
             <Button variant="outline" size="sm" onClick={() => navigate('/')}>
               Open the plan
             </Button>
-            <Button size="sm" onClick={() => setAdding(true)}>
+            <Button size="sm" onClick={() => setSay(true)}>
               <Plus size={15} /> Add food
             </Button>
           </div>
@@ -119,6 +122,7 @@ export function LogScreen() {
                     return (
                       <li key={l.id} className="border-t border-line/60 first:border-t-0">
                         <button onClick={() => openLog(l)} className="flex w-full items-center gap-3 px-4 py-3 text-left transition active:bg-sand/50">
+                          {getPhoto(l.photoId) && <img src={getPhoto(l.photoId)} alt="" className="h-10 w-10 shrink-0 rounded-lg object-cover" />}
                           <span className="min-w-0 flex-1">
                             <span className={cn('block truncate text-[15px] font-semibold', l.status === 'skipped' && 'text-ink-mute line-through')}>{f?.name ?? 'Food'}</span>
                             <span className="block text-[13px] text-ink-mute">
@@ -193,13 +197,14 @@ export function LogScreen() {
         initial={{ scale: 0.8, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         whileTap={{ scale: 0.94 }}
-        onClick={() => setAdding(true)}
+        onClick={() => setSay(true)}
         className="fixed bottom-[calc(80px+env(safe-area-inset-bottom))] right-[max(16px,calc(50vw-224px+16px))] z-20 flex h-14 items-center gap-2 rounded-full bg-ink pl-4 pr-5 text-[15px] font-semibold text-paper shadow-lift focus-ring"
       >
         <Plus size={20} strokeWidth={2.5} /> Add food
       </motion.button>
 
       <LogSheet target={target} member={me} onClose={() => setTarget(null)} />
+      <SayItSheet open={say} onClose={() => setSay(false)} member={me} date={date} onBrowse={() => setAdding(true)} />
       <AddFoodSheet
         open={adding}
         onOpenChange={setAdding}

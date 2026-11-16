@@ -48,6 +48,10 @@ Or tap **Try demo** on the welcome screen. It loads Samridhi and Naina with two 
 | Progress | Weekly review: average calories and protein, protein days, meals completed, most-skipped meal, most-eaten foods and vegetable variety. Optional weight is shown as weekly or monthly averages, and weight is never shown to the other person. |
 | Sharing | Each person chooses what the other sees: full log, calories, protein and/or meal completion. |
 
+## Say it, type it or snap it
+
+Tap **Add food** (or the camera on any meal) and tell Rasoi what you ate: "2 roti, 1 katori dal and half a cup of rice", "skipped breakfast, had poha and chai instead" — in English, Hinglish or Hindi. It works out the foods and amounts, you confirm, and the planned items you didn't eat can be marked skipped in the same step. Talking uses your phone's speech recognition. Photos are kept with the meal; when you open Rasoi from the Claude link, Claude also reads the photo and works out what's on the plate by itself.
+
 ## Kitchen: cook, groceries, budget
 
 - **Your cook** (Week → Cook, or during onboarding): name, WhatsApp number, Hindi or English, when they come and which meals, regular day off. Mark days they're not coming; Home shows it.

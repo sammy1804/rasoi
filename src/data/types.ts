@@ -349,6 +349,8 @@ export interface FoodLog {
   fraction: number
   /** nutrients snapshot at time of logging (estimate) */
   nutrients: Nutrients
+  /** a photo of the meal, kept on this phone (see data/photos.ts) */
+  photoId?: string
   createdAt: string
   updatedAt: string
 }

@@ -106,14 +106,42 @@ function expect(cond, msg) {
       expect((await kcal()) < before, 'partial did not reduce calories')
     })
 
-    await step('Add an extra food (chai)', async () => {
+    await step('Type what you ate: foods and amounts are worked out', async () => {
       const before = await kcal()
       await page.getByRole('button', { name: 'Add food' }).first().click()
-      await page.getByRole('textbox', { name: 'Search foods' }).fill('chai')
-      await page.getByRole('button', { name: /Chai \(with milk/ }).click()
+      await page.getByRole('textbox', { name: 'What you ate' }).fill('1 cup chai and 2 biscuits')
+      await page.getByTestId('sayit-go').click()
+      const review = await page.getByTestId('sayit-review').innerText()
+      expect(review.includes('Chai') && review.includes('Digestive biscuits'), `did not recognise chai and biscuits: ${review.slice(0, 120)}`)
+      await page.getByTestId('sayit-add').click()
+      await page.waitForTimeout(400)
+      expect((await kcal()) > before + 100, 'typed foods did not add calories')
+    })
+
+    await step('"Had something else instead" skips the planned meal; a photo stays with it', async () => {
+      const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAFElEQVR4nGP8z8Dwn4EIwESMolGFAAANnwEPgkCLtgAAAABJRU5ErkJggg==', 'base64')
+      await page.getByTestId('slot-lunch').locator('input[type=file]').setInputFiles({ name: 'lunch.png', mimeType: 'image/png', buffer: png })
+      await page.getByRole('textbox', { name: 'What you ate' }).fill('skipped the plan, had 2 roti and rajma instead')
+      await page.getByTestId('sayit-go').click()
+      const review = await page.getByTestId('sayit-review').innerText()
+      expect(review.includes('Chapati') && review.includes('Rajma'), `did not recognise roti and rajma: ${review.slice(0, 120)}`)
+      expect((await page.getByRole('switch', { name: 'I had this instead of the plan' }).getAttribute('aria-checked')) === 'true', '"instead" should switch on replacing the plan')
+      await page.getByTestId('sayit-add').click()
+      await page.waitForTimeout(500)
+      const lunch = page.getByTestId('slot-lunch')
+      expect((await lunch.getByText('Skipped').count()) >= 3, 'planned lunch items were not marked skipped')
+      expect((await lunch.locator('img').count()) === 1, 'the meal photo is not shown with lunch')
+    })
+
+    await step('The food list is still one tap away', async () => {
+      const before = await kcal()
+      await page.getByRole('button', { name: 'Add food' }).first().click()
+      await page.getByRole('button', { name: /Pick from the food list/ }).click()
+      await page.getByRole('textbox', { name: 'Search foods' }).fill('banana')
+      await page.getByRole('button', { name: /^Banana/ }).click()
       await page.getByRole('button', { name: /^Add · / }).click()
       await page.waitForTimeout(400)
-      expect((await kcal()) > before, 'adding chai did not add calories')
+      expect((await kcal()) > before, 'adding from the list did not add calories')
     })
 
     await step('Naina joins by code on the same phone', async () => {

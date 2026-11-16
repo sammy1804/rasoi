@@ -1,10 +1,12 @@
 import { AnimatePresence, motion, type PanInfo } from 'framer-motion'
-import { ArrowLeftRight, Check, ChefHat, Droplet, MessageCircle, Eye, Lock, Minus, Pencil, Plus, Sparkles, UserPlus, X } from 'lucide-react'
+import { ArrowLeftRight, Camera, Check, ChefHat, Droplet, MessageCircle, Eye, Lock, Minus, Pencil, Plus, Sparkles, UserPlus, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useDay } from '@/app/DayContext'
 import { SLOT_META, hueOf, slotForNow } from '@/app/meta'
 import { AddFoodSheet } from '@/components/AddFoodSheet'
+import { SayItSheet } from '@/components/SayItSheet'
+import { getPhoto } from '@/data/photos'
 import { Avatar } from '@/components/Avatar'
 import { DayStrip } from '@/components/DayStrip'
 import { LogSheet, MiniStatus, type LogTarget } from '@/components/LogSheet'
@@ -32,6 +34,7 @@ export function HomeScreen() {
   const [dir, setDir] = useState(0)
   const [target, setTarget] = useState<LogTarget | null>(null)
   const [adding, setAdding] = useState<{ slot?: MealSlot } | null>(null)
+  const [say, setSay] = useState<{ slot?: MealSlot; photos?: File[] } | null>(null)
 
   const me = member!
   const viewing: HouseholdMember = (viewUserId && partner && viewUserId === partner.userId ? partner : me) ?? me
@@ -266,7 +269,8 @@ export function HomeScreen() {
                     onTick={(r) => tick(r, sl.slot)}
                     onEdit={(r) => setTarget({ kind: 'planned', row: r, slot: sl.slot, date })}
                     onEditExtra={(l) => setTarget({ kind: 'log', log: l })}
-                    onAdd={() => setAdding({ slot: sl.slot })}
+                    onAdd={() => setSay({ slot: sl.slot })}
+                    onPhoto={(photos) => setSay({ slot: sl.slot, photos })}
                     foodsName={(id) => allFoods(db)[id]?.name ?? 'Food'}
                     db={db}
                   />
@@ -291,7 +295,7 @@ export function HomeScreen() {
           initial={{ scale: 0.8, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           whileTap={{ scale: 0.94 }}
-          onClick={() => setAdding({})}
+          onClick={() => setSay({})}
           className="fixed bottom-[calc(80px+env(safe-area-inset-bottom))] right-[max(16px,calc(50vw-224px+16px))] z-20 flex h-14 items-center gap-2 rounded-full bg-ink pl-4 pr-5 text-[15px] font-semibold text-paper shadow-lift focus-ring"
           aria-label="Add food"
         >
@@ -300,6 +304,7 @@ export function HomeScreen() {
       )}
 
       <LogSheet target={target} member={me} onClose={() => setTarget(null)} />
+      <SayItSheet open={!!say} onClose={() => setSay(null)} member={me} date={date} defaultSlot={say?.slot} initialPhotos={say?.photos} onBrowse={() => setAdding({ slot: say?.slot })} />
       <AddFoodSheet
         open={!!adding}
         onOpenChange={(o) => !o && setAdding(null)}
@@ -420,6 +425,7 @@ function MealSection({
   onEdit,
   onEditExtra,
   onAdd,
+  onPhoto,
   foodsName,
   db,
 }: {
@@ -430,10 +436,12 @@ function MealSection({
   onEdit: (r: PlannedRow) => void
   onEditExtra: (l: FoodLog) => void
   onAdd: () => void
+  onPhoto?: (photos: File[]) => void
   foodsName: (id: string) => string
   db: ReturnType<typeof useSession>['db']
 }) {
   const meta = SLOT_META[sl.slot]
+  const photos = [...new Set([...sl.planned.map((r) => r.log?.photoId), ...sl.extras.map((l) => l.photoId)].filter(Boolean))].map((id) => getPhoto(id)).filter(Boolean) as string[]
   return (
     <section aria-label={meta.label} data-testid={`slot-${sl.slot}`}>
       <div className="mb-1 flex items-center gap-2 px-1">
@@ -457,8 +465,30 @@ function MealSection({
           <span className="text-[12px] font-semibold text-ink-mute tabular">
             {sl.markedCount}/{sl.requiredCount}
           </span>
+          {!readOnly && onPhoto && (
+            <label className="grid h-9 w-9 cursor-pointer place-items-center rounded-full bg-sand text-ink-soft transition hover:text-ink active:scale-95 focus-within:ring-2 focus-within:ring-clay/40" aria-label={`Add a photo of ${meta.label.toLowerCase()}`}>
+              <Camera size={16} />
+              <input
+                type="file"
+                accept="image/*"
+                className="sr-only"
+                onChange={(e) => {
+                  const files = [...(e.target.files ?? [])]
+                  e.target.value = ''
+                  if (files.length) onPhoto(files)
+                }}
+              />
+            </label>
+          )}
         </span>
       </div>
+      {photos.length > 0 && (
+        <div className="mb-2 flex gap-2 px-1">
+          {photos.slice(0, 4).map((url, i) => (
+            <img key={i} src={url} alt={`${meta.label} photo ${i + 1}`} className="h-16 w-16 rounded-xl object-cover" />
+          ))}
+        </div>
+      )}
       <ul className="overflow-hidden rounded-2xl border border-line/80 bg-card shadow-soft">
         {sl.planned.map((r) => (
           <ItemRow key={r.item.id} r={r} readOnly={readOnly} pulse={pulseId === r.item.id} onTick={() => onTick(r)} onEdit={() => onEdit(r)} />
@@ -469,7 +499,7 @@ function MealSection({
         {!readOnly && (
           <li className="border-t border-line/60">
             <button onClick={onAdd} className="flex w-full items-center gap-2 px-4 py-2.5 text-[13px] font-semibold text-ink-mute transition hover:text-ink">
-              <Plus size={15} /> Add to {meta.label.toLowerCase()}
+              <Plus size={15} /> Had something else? Say or type it
             </button>
           </li>
         )}

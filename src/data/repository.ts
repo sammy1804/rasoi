@@ -262,6 +262,7 @@ interface LogInput {
   status?: LogStatus
   fraction?: number
   mealItemId?: ID
+  photoId?: string
 }
 
 function buildLog(db: DB, input: LogInput, existing?: FoodLog): FoodLog {
@@ -281,6 +282,7 @@ function buildLog(db: DB, input: LogInput, existing?: FoodLog): FoodLog {
     unit: input.unit,
     fraction,
     nutrients: food ? nutrientsFor(food, input.amount, input.unit, fraction) : { kcal: 0, protein: 0, carbs: 0, fat: 0, fibre: 0 },
+    photoId: input.photoId ?? existing?.photoId,
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
   }

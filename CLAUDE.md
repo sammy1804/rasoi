@@ -21,7 +21,8 @@ Shared 7-day meal planner + food tracker for two people (Samridhi and Naina). Re
 | Command | What it does |
 |---|---|
 | `npm run dev` | Dev server on :5173 (public-site build, hash routes like `/#/join/CODE`) |
-| `npm run smoke` | Build both targets + full end-to-end check suite (~3 min) |
+| `npm run smoke` | Matcher checks, build both targets, full end-to-end suite (~4 min) |
+| `npm run check:understand` | Test the on-phone meal matcher on real sentences |
 | `npm run build:mobile` | Only build `dist-mobile/index.html` |
 | `npm run build` | Public site in `dist/` (GitHub Pages; installable as a home-screen app) |
 | `npm run typecheck` | TypeScript only |
@@ -40,6 +41,17 @@ Shared 7-day meal planner + food tracker for two people (Samridhi and Naina). Re
 - `src/lib/nutrition.ts` (portions, targets, ramp), `src/lib/summary.ts` (day view, insights, weekly review).
 - `src/screens/*` — Onboarding, Invite, Home, Week, Log, Progress, Profile.
 
+## Logging by talking, typing or photo
+
+- **"What did you eat?"** (`src/components/SayItSheet.tsx`) opens from the Home/Log "Add food" button, from "Had something else?" under each meal, and from the camera button on each meal. The person says, types or photographs the meal; the app shows the foods and amounts it worked out; they fix anything and add it. The classic searchable food list is one tap away ("Pick from the food list instead").
+- **Two ways it understands** (`src/lib/understand.ts`, both return `Understood`):
+  - `understandText` — an on-phone matcher, no network: English, Hinglish and Hindi numbers ("ek", "dedh", "½"), units (katori, cup, glass, slice, g…), sizes (small/big), food aliases (roti → chapati, dahi → curd…), which meal, and "skipped / instead of". Runs everywhere, including the public site. `npm run check:understand` tests it on real sentences — add a case when you add aliases.
+  - Claude (`src/lib/assistant.ts` → `askClaude`) — only on the Claude phone page, through the artifact `sample` capability with images. It reads photos and looser sentences. Its JSON reply is never trusted: `fromClaude` validates ids, units and amounts against the library. If Claude fails and there are words, the matcher takes over.
+- **Photos**: a photo alone is enough where Claude can see it (it's worked out automatically). On the public site there is no AI, so the photo is saved with the meal and the person says or types what's in it. Thumbnails live in `src/data/photos.ts` (own localStorage key, newest 40), referenced by `FoodLog.photoId`.
+- **Voice** (`useVoice`): Claude's `dictation` capability where offered (desktop Chromium), else the browser's speech recognition (Chrome on Android, Safari on iPhone), else a hint to use the keyboard's mic key.
+- **Plan matching**: a recognised food that is on today's plan for that meal ticks the planned item with the amount actually eaten; "I had this instead of the plan" marks the rest of that meal skipped.
+- **Publishing**: the Claude phone page must be published with `capabilities: { sample: { images: true }, dictation: {} }` (omitting `capabilities` on later publishes keeps them). Load the `artifact-capabilities` skill before changing this.
+
 ## Kitchen: cook, groceries, WhatsApp, Zepto
 
 - **Family's cook profile** (`Cook`, `CookLeave` in `types.ts`; actions in `repository.ts`): name, WhatsApp number, Hindi/English, visits (time + which meals), weekly off, marked leave. Family manages it in Week → Cook.
@@ -52,6 +64,7 @@ Shared 7-day meal planner + food tracker for two people (Samridhi and Naina). Re
 - **WhatsApp**: `cookMessage` / `weekMenuMessage` / `groceryMessage` build the text; buttons open `https://wa.me/<number>?text=…` (cook's chat) or `wa.me/?text=…` (pick the house group). Automatic group posting needs Meta's WhatsApp Business Groups API (business account, server, webhooks): not possible from a static site.
 - **Groceries by shop** (`src/screens/Groceries.tsx`, logic in `src/lib/kitchen.ts`): three kinds of shop — `quick` (Zepto etc., chosen order days; the list covers from the next order day until the one after), `bulk` (DMart, a month of staples), `subscription` (Country Delight; per-weekday amounts and a "set: 500 ml daily" hint, never in order lists). Defaults: milk/curd/paneer → subscription, `PANTRY` → bulk, the rest → quick; per-item override in `household.itemShop`.
 - **Filling the cart automatically**: Zepto (`https://mcp.zepto.co.in/mcp`, github.com/zeptonow/mcp) and Swiggy Instamart (`https://mcp.swiggy.com/im`) run official MCP connectors for AI assistants; neither has a normal REST API, and Country Delight / DMart / Blinkit have nothing public. So "Fill my Zepto cart with Claude" copies `orderPrompt(...)`: the user pastes it into a Claude chat that has the store's connector (one-time: add custom connector, sign in with mobile + OTP) and Claude fills the real cart, stopping before payment. Tool names aren't documented, so don't hard-code them. If the user adds the connector to this session and asks you to order, show the cart and total and get an explicit yes before any step that places an order or pays.
+- **Zepto without Claude — checked Nov 2026, not possible yet**: there is no API key of any kind. Unofficial reverse-engineered projects only read prices and stock, none write to a cart, and using them would break Zepto's terms. The MCP endpoint is the one official door; a web app could in principle sign in to it directly (OAuth with mobile + OTP) and call its search/cart tools with no AI, but Zepto only allows sign-in redirects back to claude.ai, VS Code, Postman and localhost, so our site would need Zepto to allowlist its address (they ask for a GitHub issue on zeptonow/mcp). The sandbox blocks `mcp.zepto.co.in`, so its sign-in metadata hasn't been inspected. Don't build against undocumented Zepto endpoints.
 - **Budget** (`BudgetPanel`): `PRICES` in `src/data/kitchen.ts` are rough ₹ per kg / litre / piece, editable per item (`household.prices`). `monthlyEstimate` = a typical week × 30/7, split by shop. `household.budgetMonthly`, `SpendLog` entries (logged from ticked items or by hand), month-to-date vs pace.
 - **Graphs** (`src/components/charts.tsx`): calories/protein per day, meal-completion grid, macro split, both-people protein (% of own target, one axis), 4-week trend. Chart colours are the validated `--c1/--c2/--c3` tokens; don't add colours without re-running the dataviz palette validator.
 
