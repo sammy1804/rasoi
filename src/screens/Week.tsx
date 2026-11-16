@@ -1,7 +1,8 @@
 import { motion } from 'framer-motion'
 import { ArrowLeftRight, ChevronDown, ChevronRight, Plus, RotateCcw, Trash2 } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useMemo, useRef, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
+import { CookPanel, GroceriesPanel } from './Kitchen'
 import { useDay } from '@/app/DayContext'
 import { SLOT_META } from '@/app/meta'
 import { AddFoodSheet } from '@/components/AddFoodSheet'
@@ -21,8 +22,40 @@ import { fmtQty } from '@/lib/format'
 import { PORTION_LABEL, nutrientsFor, personalItems, portionFor } from '@/lib/nutrition'
 import { cn, fmtNum } from '@/lib/utils'
 
+type Section = 'plan' | 'groceries' | 'cook'
+
 export function WeekScreen() {
-  const { db, member, members, household, nameOf } = useSession()
+  const { household, cooks } = useSession()
+  const location = useLocation()
+  const [section, setSection] = useState<Section>(((location.state as { section?: Section } | null)?.section) ?? 'plan')
+  const cook = cooks[0]
+  return (
+    <div className="px-4">
+      <header className="pt-safe">
+        <div className="pt-5">
+          <p className="text-[13px] font-semibold uppercase tracking-[0.14em] text-ink-mute">{household?.name} · kitchen</p>
+          <h1 className="mt-0.5 font-display text-[28px] font-medium tracking-tight">
+            {section === 'plan' ? 'Weekly plan' : section === 'groceries' ? 'Groceries' : cook ? cook.name : 'Your cook'}
+          </h1>
+        </div>
+        <Segmented
+          className="mt-4"
+          value={section}
+          onChange={setSection}
+          options={[
+            { value: 'plan', label: 'Plan' },
+            { value: 'groceries', label: 'Groceries' },
+            { value: 'cook', label: 'Cook' },
+          ]}
+        />
+      </header>
+      <div className="mt-5">{section === 'plan' ? <WeekPlan /> : section === 'groceries' ? <GroceriesPanel /> : <CookPanel />}</div>
+    </div>
+  )
+}
+
+function WeekPlan() {
+  const { db, member, members, nameOf } = useSession()
   const me = member!
   const navigate = useNavigate()
   const { setDate } = useDay()
@@ -35,33 +68,25 @@ export function WeekScreen() {
   const todayRef = useRef<HTMLDivElement>(null)
   const foods = allFoods(db)
 
-  useEffect(() => {
-    todayRef.current?.scrollIntoView({ block: 'start', behavior: 'instant' as ScrollBehavior })
-    window.scrollBy({ top: -12 })
-  }, [])
-
   return (
-    <div className="px-4">
-      <header className="pt-safe">
-        <div className="pt-5">
-          <p className="text-[13px] font-semibold uppercase tracking-[0.14em] text-ink-mute">{household?.name} · this week</p>
-          <h1 className="mt-0.5 font-display text-[28px] font-medium tracking-tight">Weekly plan</h1>
-          <p className="mt-1 text-[14px] text-ink-soft">
-            {fmtShortDate(dates[0])} – {fmtShortDate(dates[6])} · one menu, {members.length > 1 ? 'two portion sizes' : 'your portions'}
-          </p>
-        </div>
+    <div>
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[14px] text-ink-soft">
+          {fmtShortDate(dates[0])} – {fmtShortDate(dates[6])} · {members.length > 1 ? 'one menu, two portion sizes' : 'your portions'}
+        </p>
         <Segmented
-          className="mt-4"
+          size="sm"
+          className="w-[170px] shrink-0"
           value={mode}
           onChange={setMode}
           options={[
-            { value: 'mine', label: 'My portions' },
-            { value: 'shared', label: 'Shared menu' },
+            { value: 'mine', label: 'Mine' },
+            { value: 'shared', label: 'Shared' },
           ]}
         />
-      </header>
+      </div>
 
-      <div className="mt-5 space-y-4">
+      <div className="mt-4 space-y-4">
         {dates.map((d, i) => {
           const day = i as Weekday
           const isToday = d === today

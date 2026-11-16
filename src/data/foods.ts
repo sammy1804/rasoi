@@ -1,3 +1,4 @@
+import { KITCHEN } from './kitchen'
 import type { Food, FoodCategory, FoodUnit } from './types'
 
 /**
@@ -135,5 +136,16 @@ export const BUILTIN_FOODS: Food[] = [
   food('biscuits', 'Digestive biscuits', 'snack', [480, 7, 65, 21, 3.5], [piece(15, 'biscuit'), g], 2),
   food('samosa', 'Samosa', 'snack', [308, 5, 32, 18, 3], [piece(80, 'samosa'), g], 1),
 ]
+
+// Attach Hindi names, raw ingredients and cook notes.
+for (const f of BUILTIN_FOODS) {
+  const k = KITCHEN[f.id]
+  if (k) {
+    f.hi = k.hi
+    f.ingredients = k.ing.map(([item, qty, unit = 'g', soak]) => ({ item, qty, unit, soak }))
+    f.cookNote = k.note
+    f.cookNoteHi = k.noteHi
+  }
+}
 
 export const BUILTIN_FOOD_MAP: Record<string, Food> = Object.fromEntries(BUILTIN_FOODS.map((f) => [f.id, f]))

@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { ArrowLeft, ArrowRight, Check, Home as HomeIcon, Link2, Sparkles, Users } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, ChefHat, Home as HomeIcon, Link2, Sparkles, Users } from 'lucide-react'
 import { useMemo, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Avatar } from '@/components/Avatar'
@@ -10,18 +10,24 @@ import { Segmented } from '@/components/ui/segmented'
 import { Stepper } from '@/components/ui/stepper'
 import { Switch } from '@/components/ui/switch'
 import { NAINA_PROFILE, SAMRIDHI_PROFILE, buildDemo } from '@/data/demo'
-import { checkJoin, createHousehold, joinHousehold } from '@/data/repository'
-import type { Activity, Diet, Goal, PortionStyle, Profile } from '@/data/types'
+import { DEFAULT_MEAL_TIMES, checkJoin, cooksOf, createHousehold, findHouseholdByCode, joinAsCook, joinHousehold, membersOf, switchUser, type CookInput } from '@/data/repository'
+import { VisitsEditor, WeeklyOffPicker } from '@/components/kitchen'
+import { CookForm, MealTimesEditor, emptyCook } from './Kitchen'
+import { hueOf } from '@/app/meta'
+import type { Activity, Diet, Goal, MealSlot, PortionStyle, Profile } from '@/data/types'
 import { useSession } from '@/hooks/useSession'
 import { todayISO } from '@/lib/dates'
 import { portionStyleForGoal, suggestTargets } from '@/lib/nutrition'
 import { cn, parseJoinInput } from '@/lib/utils'
 
-type Mode = 'create' | 'join'
-type Step = 'welcome' | 'choose' | 'code' | 'about' | 'food' | 'targets' | 'household'
+type Mode = 'create' | 'join' | 'cook'
+type Step = 'welcome' | 'choose' | 'code' | 'about' | 'food' | 'targets' | 'household' | 'cook' | 'cook-me' | 'cook-times'
 
-const CREATE_STEPS: Step[] = ['welcome', 'choose', 'about', 'food', 'targets', 'household']
-const JOIN_STEPS: Step[] = ['welcome', 'choose', 'code', 'about', 'food', 'targets']
+const STEPS: Record<Mode, Step[]> = {
+  create: ['welcome', 'choose', 'about', 'food', 'targets', 'household', 'cook'],
+  join: ['welcome', 'choose', 'code', 'about', 'food', 'targets'],
+  cook: ['welcome', 'choose', 'code', 'cook-me', 'cook-times'],
+}
 
 const DISLIKE_OPTIONS = ['Lauki', 'Kaddu', 'Karela', 'Spinach', 'Baingan', 'Bhindi', 'Mushroom', 'Tinda', 'Egg yolk', 'Rajma']
 
@@ -91,7 +97,7 @@ const slide = {
 
 export function Onboarding({ initialCode }: { initialCode?: string }) {
   const navigate = useNavigate()
-  const { member: existing, nameOf } = useSession()
+  const { db, nameOf } = useSession()
   const joining = initialCode !== undefined
   const [mode, setMode] = useState<Mode>(joining ? 'join' : 'create')
   const [step, setStep] = useState<Step>(joining ? 'code' : 'welcome')
@@ -100,8 +106,12 @@ export function Onboarding({ initialCode }: { initialCode?: string }) {
   const [code, setCode] = useState(initialCode ?? '')
   const [householdName, setHouseholdName] = useState('Home')
   const [busy, setBusy] = useState(false)
+  const [mealTimes, setMealTimes] = useState<Record<MealSlot, string>>({ ...DEFAULT_MEAL_TIMES })
+  const [hasCook, setHasCook] = useState<boolean | null>(null)
+  const [cookDraft, setCookDraft] = useState<CookInput>(emptyCook())
+  const [claimId, setClaimId] = useState<string | undefined>()
 
-  const steps = mode === 'create' ? CREATE_STEPS : JOIN_STEPS
+  const steps = STEPS[mode]
   const idx = steps.indexOf(step)
   const go = (s: Step, d = 1) => {
     setDir(d)
@@ -156,7 +166,7 @@ export function Onboarding({ initialCode }: { initialCode?: string }) {
 
   const finishCreate = () => {
     setBusy(true)
-    createHousehold({ name: draft.name, profile: toProfile() }, householdName)
+    createHousehold({ name: draft.name, profile: toProfile() }, householdName, { mealTimes, cook: hasCook && cookDraft.name.trim() ? cookDraft : undefined })
     navigate('/invite?new=1', { replace: true })
   }
 
@@ -171,8 +181,33 @@ export function Onboarding({ initialCode }: { initialCode?: string }) {
     navigate('/?welcome=1', { replace: true })
   }
 
-  const join = code ? checkJoin(code) : null
+  const familyJoin = code ? checkJoin(code) : null
+  // the cook can always join (no two-person limit)
+  const cookHousehold = code ? findHouseholdByCode(db, code) : undefined
+  const join = mode === 'cook' && familyJoin ? { ...familyJoin, household: cookHousehold, error: cookHousehold ? undefined : familyJoin.error } : familyJoin
   const joinOwner = join?.members[0]
+  const unclaimedCooks = cookHousehold ? cooksOf(db, cookHousehold.id).filter((c) => !c.userId) : []
+  const cookValid = cookDraft.name.trim().length > 0 && cookDraft.visits.length > 0 && cookDraft.visits.every((v) => v.slots.length > 0)
+
+  const finishCook = () => {
+    setBusy(true)
+    const res = joinAsCook(code, cookDraft, claimId)
+    if (res.error) {
+      setBusy(false)
+      go('code', -1)
+      return
+    }
+    navigate('/', { replace: true })
+  }
+
+  const people = useMemo(() => {
+    const out: { userId: string; name: string; hue: number; role: string }[] = []
+    for (const h of Object.values(db.households)) {
+      for (const m of membersOf(db, h.id)) out.push({ userId: m.userId, name: nameOf(m.userId), hue: m.hue, role: h.name })
+      for (const c of cooksOf(db, h.id)) if (c.userId) out.push({ userId: c.userId, name: c.name, hue: 2, role: `Cook · ${h.name}` })
+    }
+    return out.slice(0, 4)
+  }, [db, nameOf])
 
   const aboutValid = draft.name.trim().length > 0 && Number(draft.heightCm) >= 100 && Number(draft.heightCm) <= 230 && Number(draft.weightKg) >= 25 && Number(draft.weightKg) <= 250
 
@@ -210,7 +245,7 @@ export function Onboarding({ initialCode }: { initialCode?: string }) {
           >
             {step === 'welcome' && (
               <Welcome
-                existingName={existing ? nameOf(existing.userId) : undefined}
+                people={people}
                 onStart={() => {
                   setMode('create')
                   go('choose')
@@ -223,12 +258,15 @@ export function Onboarding({ initialCode }: { initialCode?: string }) {
                   buildDemo()
                   navigate('/', { replace: true })
                 }}
-                onContinue={() => navigate('/')}
+                onContinue={(userId) => {
+                  switchUser(userId)
+                  navigate('/')
+                }}
               />
             )}
 
             {step === 'choose' && (
-              <Screen title="Start a kitchen or join one" sub="One person creates the household. The other joins with a link or code — no need to set up the plan twice.">
+              <Screen title="Start or join a kitchen" sub="One person sets up the household. Everyone else, the cook included, joins with a code.">
                 <div className="mt-2 space-y-3">
                   <ChoiceCard
                     active={mode === 'create'}
@@ -244,6 +282,13 @@ export function Onboarding({ initialCode }: { initialCode?: string }) {
                     title="Join a household"
                     text="Got an invite link or a 6-letter code? Join and set your own goals."
                   />
+                  <ChoiceCard
+                    active={mode === 'cook'}
+                    onClick={() => setMode('cook')}
+                    icon={<ChefHat size={20} />}
+                    title="I’m the cook · मैं खाना बनाती हूँ"
+                    text="See what to cook and how much, every day. Mark the days you’re not coming."
+                  />
                 </div>
                 <Footer>
                   <Button size="lg" block onClick={next}>
@@ -254,7 +299,10 @@ export function Onboarding({ initialCode }: { initialCode?: string }) {
             )}
 
             {step === 'code' && (
-              <Screen title="Join your household" sub="Paste the invite link, or type the 6-letter code you were sent.">
+              <Screen
+                title={mode === 'cook' ? 'Family code · परिवार का कोड' : 'Join your household'}
+                sub={mode === 'cook' ? 'Ask the family for the 6-letter code. परिवार से 6 अक्षर का कोड लें।' : 'Paste the invite link, or type the 6-letter code you were sent.'}
+              >
                 <Field label="Invite link or code">
                   <Input
                     autoFocus={!initialCode}
@@ -274,7 +322,7 @@ export function Onboarding({ initialCode }: { initialCode?: string }) {
                           We couldn’t find that code. Check it with the person who invited you — codes are 6 characters.
                         </p>
                       )}
-                      {join.error === 'full' && (
+                      {join.error === 'full' && mode !== 'cook' && (
                         <p className="rounded-2xl bg-sand px-4 py-3 text-sm text-ink-soft">That household already has two people in it.</p>
                       )}
                       {!join.error && join.household && (
@@ -283,7 +331,11 @@ export function Onboarding({ initialCode }: { initialCode?: string }) {
                           <div className="min-w-0 flex-1">
                             <p className="font-semibold">{join.household.name}</p>
                             <p className="text-sm text-ink-soft">
-                              {joinOwner ? `${nameOf(joinOwner.userId)} is waiting for you` : 'Ready to join'}
+                              {mode === 'cook'
+                                ? `${join.members.map((m) => nameOf(m.userId)).join(' & ')}’s kitchen`
+                                : joinOwner
+                                  ? `${nameOf(joinOwner.userId)} is waiting for you`
+                                  : 'Ready to join'}
                             </p>
                           </div>
                           <Check className="text-clay" size={20} />
@@ -293,8 +345,20 @@ export function Onboarding({ initialCode }: { initialCode?: string }) {
                   )}
                 </AnimatePresence>
                 <Footer>
-                  <Button size="lg" block disabled={!join || !!join.error} onClick={next}>
-                    Join {join?.household?.name ?? 'household'} <ArrowRight size={18} />
+                  <Button
+                    size="lg"
+                    block
+                    disabled={!join || !!join.error}
+                    onClick={() => {
+                      if (mode === 'cook' && unclaimedCooks[0] && !claimId) {
+                        const c = unclaimedCooks[0]
+                        setClaimId(c.id)
+                        setCookDraft({ name: c.name, phone: c.phone ? `+${c.phone}` : '', language: c.language, visits: c.visits.map((v) => ({ ...v, slots: [...v.slots] })), weeklyOff: [...c.weeklyOff] })
+                      }
+                      next()
+                    }}
+                  >
+                    {mode === 'cook' ? 'Continue · आगे' : `Join ${join?.household?.name ?? 'household'}`} <ArrowRight size={18} />
                   </Button>
                 </Footer>
               </Screen>
@@ -501,9 +565,97 @@ export function Onboarding({ initialCode }: { initialCode?: string }) {
                     A 7-day home-style rotation — chilla, dal-chawal, paneer, soya, chaat. Edit it any time from the Week tab.
                   </p>
                 </div>
+                <div className="mt-8">
+                  <p className="mb-2 text-[13px] font-semibold text-ink-soft">When do you usually eat?</p>
+                  <MealTimesEditor value={mealTimes} onChange={setMealTimes} />
+                </div>
                 <Footer>
-                  <Button size="lg" variant="accent" block disabled={busy || !householdName.trim()} onClick={finishCreate}>
+                  <Button size="lg" block disabled={!householdName.trim()} onClick={next}>
+                    Continue <ArrowRight size={18} />
+                  </Button>
+                </Footer>
+              </Screen>
+            )}
+
+            {step === 'cook' && (
+              <Screen title="Do you have a cook?" sub="Rasoi tells them what to make and how much for both of you — on WhatsApp, in Hindi or English.">
+                <div className="space-y-3">
+                  <ChoiceCard active={hasCook === true} onClick={() => setHasCook(true)} icon={<ChefHat size={20} />} title="Yes, add our cook" text="Name, timings and days off. Takes a minute." />
+                  <ChoiceCard active={hasCook === false} onClick={() => setHasCook(false)} icon={<HomeIcon size={20} />} title="We cook ourselves" text="You can add a cook later from the Week tab." />
+                </div>
+                {hasCook && (
+                  <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="mt-6">
+                    <CookForm value={cookDraft} onChange={setCookDraft} />
+                  </motion.div>
+                )}
+                <Footer>
+                  <Button size="lg" variant="accent" block disabled={busy || hasCook === null || (hasCook && !cookValid)} onClick={finishCreate}>
                     Create household <ArrowRight size={18} />
+                  </Button>
+                </Footer>
+              </Screen>
+            )}
+
+            {step === 'cook-me' && (
+              <Screen title="About you · आपके बारे में" sub="The family will see your name. परिवार को आपका नाम दिखेगा।">
+                {unclaimedCooks.length > 0 && (
+                  <div className="mb-5 flex flex-wrap items-center gap-2">
+                    <span className="text-[14px] text-ink-soft">Are you · क्या आप हैं</span>
+                    {unclaimedCooks.map((c) => (
+                      <Chip
+                        key={c.id}
+                        active={claimId === c.id}
+                        onClick={() => {
+                          setClaimId(c.id)
+                          setCookDraft({ name: c.name, phone: c.phone ? `+${c.phone}` : '', language: c.language, visits: c.visits.map((v) => ({ ...v, slots: [...v.slots] })), weeklyOff: [...c.weeklyOff] })
+                        }}
+                      >
+                        {c.name}?
+                      </Chip>
+                    ))}
+                    {claimId && (
+                      <button className="text-[13px] font-semibold text-ink-mute" onClick={() => { setClaimId(undefined); setCookDraft(emptyCook()) }}>
+                        No, I’m new
+                      </button>
+                    )}
+                  </div>
+                )}
+                <div className="space-y-4">
+                  <Field label="Your name · आपका नाम">
+                    <Input value={cookDraft.name} onChange={(e) => setCookDraft({ ...cookDraft, name: e.target.value })} placeholder="e.g. Sunita" className="h-14 text-[18px]" />
+                  </Field>
+                  <Field label="WhatsApp number · व्हाट्सऐप नंबर (optional)">
+                    <Input type="tel" inputMode="tel" value={cookDraft.phone ?? ''} onChange={(e) => setCookDraft({ ...cookDraft, phone: e.target.value })} placeholder="98xxxxxxxx" className="h-14 text-[18px]" />
+                  </Field>
+                  <Field label="Language · भाषा">
+                    <Segmented
+                      value={cookDraft.language}
+                      onChange={(l) => setCookDraft({ ...cookDraft, language: l })}
+                      options={[
+                        { value: 'hi', label: 'हिंदी' },
+                        { value: 'en', label: 'English' },
+                      ]}
+                    />
+                  </Field>
+                </div>
+                <Footer>
+                  <Button size="lg" block disabled={!cookDraft.name.trim()} onClick={next}>
+                    Continue · आगे <ArrowRight size={18} />
+                  </Button>
+                </Footer>
+              </Screen>
+            )}
+
+            {step === 'cook-times' && (
+              <Screen title="Your timings · आपका समय" sub="When you come and which meals you make. आप कब आती हैं और कौन सा खाना बनाती हैं।">
+                <VisitsEditor visits={cookDraft.visits} onChange={(visits) => setCookDraft({ ...cookDraft, visits })} lang={cookDraft.language} />
+                <div className="mt-6">
+                  <p className="mb-2 text-[13px] font-semibold text-ink-soft">Weekly day off · साप्ताहिक छुट्टी</p>
+                  <WeeklyOffPicker value={cookDraft.weeklyOff} onChange={(weeklyOff) => setCookDraft({ ...cookDraft, weeklyOff })} />
+                </div>
+                <Footer>
+                  <Button size="lg" variant="accent" block disabled={busy || !cookValid} onClick={finishCook}>
+                    See today’s menu · आज का खाना <ArrowRight size={18} />
                   </Button>
                 </Footer>
               </Screen>
@@ -526,15 +678,16 @@ function Welcome({
   onStart,
   onJoin,
   onDemo,
-  existingName,
+  people,
   onContinue,
 }: {
   onStart: () => void
   onJoin: () => void
   onDemo: () => void
-  existingName?: string
-  onContinue: () => void
+  people: { userId: string; name: string; hue: number; role: string }[]
+  onContinue: (userId: string) => void
 }) {
+  const existingName = people.length > 0
   return (
     <div className="flex flex-1 flex-col pt-safe">
       <div className="flex items-center justify-between pt-6">
@@ -562,11 +715,26 @@ function Welcome({
         </motion.p>
       </div>
       <div className="space-y-2 pb-2 pt-8">
-        {existingName ? (
-          <Button size="lg" block onClick={onContinue}>
-            Continue as {existingName}
-          </Button>
-        ) : null}
+        {people.length > 0 && (
+          <div className="mb-2">
+            <p className="mb-2 text-[12px] font-semibold uppercase tracking-[0.12em] text-ink-mute">On this phone</p>
+            <div className="grid grid-cols-2 gap-2">
+              {people.map((p) => (
+                <button
+                  key={p.userId}
+                  onClick={() => onContinue(p.userId)}
+                  className="flex items-center gap-2.5 rounded-2xl border border-line bg-card px-3 py-2.5 text-left transition hover:border-ink/30 focus-ring"
+                >
+                  <span className={cn('grid h-9 w-9 shrink-0 place-items-center rounded-full font-display font-semibold', hueOf(p.hue).bg, hueOf(p.hue).text)}>{p.name.charAt(0)}</span>
+                  <span className="min-w-0">
+                    <span className="block truncate text-[14px] font-semibold">{p.name}</span>
+                    <span className="block truncate text-[11px] text-ink-mute">{p.role}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <Button size="lg" variant={existingName ? 'outline' : 'primary'} block onClick={onStart}>
           Create a shared plan
         </Button>

@@ -15,16 +15,32 @@ const URL = `http://localhost:${PORT}/`
 const root = path.resolve(__dirname, '..')
 
 function startServer() {
-  const proc = spawn('npx', ['vite', 'preview', '--outDir', 'dist-mobile', '--port', String(PORT), '--strictPort'], { cwd: root, stdio: 'pipe' })
+  const proc = spawn('npx', ['vite', 'preview', '--outDir', 'dist-mobile', '--port', String(PORT), '--strictPort'], { cwd: root, stdio: 'pipe', detached: true })
+  let log = ''
   return new Promise((resolve, reject) => {
-    const t = setTimeout(() => reject(new Error('preview server did not start')), 20000)
-    proc.stdout.on('data', (d) => {
-      if (String(d).includes(String(PORT))) {
+    const t = setTimeout(() => {
+      stop(proc)
+      reject(new Error('preview server did not start:\n' + log))
+    }, 20000)
+    const onData = (d) => {
+      log += String(d)
+      if (log.includes(`localhost:${PORT}`)) {
         clearTimeout(t)
         resolve(proc)
       }
-    })
+    }
+    proc.stdout.on('data', onData)
+    proc.stderr.on('data', onData)
   })
+}
+
+/** Kill the whole process group (npx → vite), not just the npx wrapper. */
+function stop(proc) {
+  try {
+    process.kill(-proc.pid)
+  } catch {
+    proc.kill()
+  }
 }
 
 const results = []
@@ -116,6 +132,54 @@ function expect(cond, msg) {
       expect((await page.getByText('Hearty portions').count()) > 0, 'Naina should see hearty portions')
     })
 
+    await step('Add a cook, see groceries with Zepto links', async () => {
+      await page.getByRole('link', { name: 'Week' }).click()
+      await page.getByRole('radio', { name: 'Cook' }).click()
+      await page.getByRole('button', { name: /Add your cook/ }).click()
+      await page.getByPlaceholder('e.g. Sunita').fill('Sunita')
+      await page.getByPlaceholder('98xxxxxxxx').fill('9812345678')
+      await page.getByRole('button', { name: 'Save' }).click()
+      await page.waitForTimeout(400)
+      expect((await page.getByTestId('cook-card').count()) === 1, 'cook card missing after adding cook')
+      expect((await page.getByTestId('cook-menu').count()) + (await page.getByTestId('cook-off').count()) === 1, 'cook menu missing')
+      const wa = await page.getByRole('link', { name: /Send to Sunita/ }).first().getAttribute('href')
+      expect(wa && wa.startsWith('https://wa.me/919812345678?text='), `bad WhatsApp link ${wa}`)
+      await page.getByRole('radio', { name: 'Groceries' }).click()
+      await page.waitForTimeout(300)
+      const zepto = await page.getByRole('link', { name: /on Zepto/ }).count()
+      expect(zepto > 5, `only ${zepto} Zepto links`)
+    })
+
+    await step('Mark the cook off tomorrow', async () => {
+      await page.getByRole('radio', { name: 'Cook' }).click()
+      await page.getByRole('button', { name: /Mark a day off/ }).click()
+      await page.getByRole('button', { name: /^Tomorrow/ }).click()
+      await page.getByRole('button', { name: 'Save' }).click()
+      await page.waitForTimeout(400)
+      expect((await page.getByTestId('leave-list').innerText()).includes('Tomorrow'), 'leave not listed')
+    })
+
+    await step('Cook joins with the code and sees her menu', async () => {
+      await page.getByRole('link', { name: 'Profile' }).click()
+      await page.getByRole('button', { name: /Sign out/ }).click()
+      await page.getByRole('button', { name: /I have an invite/ }).click()
+      await page.getByRole('button', { name: /I’m the cook/ }).click()
+      await page.getByRole('button', { name: /Continue/ }).click()
+      await page.getByRole('textbox').fill(code)
+      await page.getByRole('button', { name: /Continue · आगे/ }).click()
+      await page.getByRole('button', { name: /Continue · आगे/ }).click()
+      await page.getByRole('button', { name: /See today’s menu/ }).click()
+      await page.waitForTimeout(400)
+      expect((await page.getByTestId('cook-app').count()) === 1, 'cook interface not shown')
+      const cooks = await page.evaluate(() => Object.keys(JSON.parse(localStorage['rasoi:db:v1']).cooks).length)
+      expect(cooks === 1, `expected the cook to claim her profile, found ${cooks} cooks`)
+      await page.getByRole('radio', { name: /कल|Tomorrow/ }).click()
+      expect((await page.getByTestId('cook-off').count()) === 1, 'tomorrow should show as a day off')
+      await page.getByRole('button', { name: /Sign out|बाहर निकलें/ }).click()
+      await page.getByRole('button', { name: /Naina/ }).click()
+      await page.waitForTimeout(300)
+    })
+
     await step('Data survives a reload', async () => {
       await page.reload()
       await page.waitForTimeout(500)
@@ -132,6 +196,13 @@ function expect(cond, msg) {
         await page.waitForTimeout(250)
       }
       expect((await page.getByTestId('daily-summary').count()) === 1, 'daily summary missing')
+      await page.getByRole('link', { name: 'Progress' }).click()
+      await page.waitForTimeout(400)
+      for (const id of ['chart-kcal', 'chart-protein', 'chart-meals', 'chart-macros', 'chart-together', 'chart-trend']) {
+        expect((await page.getByTestId(id).count()) === 1, `${id} missing on Progress`)
+      }
+      await page.getByRole('link', { name: 'Home' }).click()
+      expect((await page.getByTestId('kitchen-strip').count()) === 1, 'cook strip missing on Home')
     })
     await ctx.close()
 
@@ -142,12 +213,22 @@ function expect(cond, msg) {
         watch(p)
         await p.goto(URL)
         await p.getByRole('button', { name: 'Try demo' }).click()
-        for (const t of ['Home', 'Week', 'Log', 'Progress', 'Profile']) {
-          await p.getByRole('link', { name: t }).click()
+        const check = async (label) => {
           await p.waitForTimeout(300)
           const sw = await p.evaluate(() => document.documentElement.scrollWidth)
-          expect(sw <= 360, `${colorScheme} ${t} is ${sw}px wide`)
+          expect(sw <= 360, `${colorScheme} ${label} is ${sw}px wide`)
         }
+        for (const t of ['Home', 'Week', 'Log', 'Progress', 'Profile']) {
+          await p.getByRole('link', { name: t }).click()
+          await check(t)
+        }
+        await p.getByRole('link', { name: 'Week' }).click()
+        for (const sec of ['Groceries', 'Cook']) {
+          await p.getByRole('radio', { name: sec }).click()
+          await check(sec)
+        }
+        await p.getByRole('button', { name: /Open Sunita’s view/ }).click()
+        await check('cook view')
         await c.close()
       }
     })
@@ -155,7 +236,7 @@ function expect(cond, msg) {
     await step('No console errors', async () => expect(errors.length === 0, errors.slice(0, 3).join(' | ')))
   } finally {
     await browser.close()
-    server.kill()
+    stop(server)
   }
   for (const r of results) console.log(r.join('  '))
   const failed = results.filter((r) => r[0] === '✗').length

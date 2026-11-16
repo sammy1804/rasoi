@@ -35,6 +35,51 @@ export interface Household {
   code: string
   createdBy: ID
   createdAt: string
+  /** When the household usually eats, 'HH:MM' 24h. Optional for older data. */
+  mealTimes?: Record<MealSlot, string>
+}
+
+export type CookLanguage = 'en' | 'hi'
+
+/** One visit by the cook, e.g. Morning 08:00 cooking breakfast + lunch. */
+export interface CookVisit {
+  id: ID
+  label: string
+  time: string // 'HH:MM'
+  slots: MealSlot[]
+}
+
+export interface Cook {
+  id: ID
+  householdId: ID
+  name: string
+  /** WhatsApp number with country code, digits only, e.g. 919812345678 */
+  phone?: string
+  language: CookLanguage
+  visits: CookVisit[]
+  /** regular days off */
+  weeklyOff: Weekday[]
+  /** set once the cook signs in on a device */
+  userId?: ID
+  createdAt: string
+}
+
+export interface CookLeave {
+  id: ID
+  cookId: ID
+  date: ISODate
+  note?: string
+  /** who marked it: the cook herself or a family member */
+  createdBy: ID
+  createdAt: string
+}
+
+/** A ticked-off grocery line for a given week. */
+export interface GroceryCheck {
+  householdId: ID
+  weekStart: ISODate
+  item: string
+  checked: boolean
 }
 
 export interface SharingSettings {
@@ -98,6 +143,15 @@ export type FoodCategory =
   | 'homemade'
   | 'custom'
 
+export interface Ingredient {
+  /** grocery item, e.g. 'Paneer', 'Rice', 'Rajma' */
+  item: string
+  qty: number
+  unit: 'g' | 'ml' | 'pc'
+  /** needs soaking the night before */
+  soak?: boolean
+}
+
 export interface Nutrients {
   kcal: number
   protein: number
@@ -136,6 +190,12 @@ export interface Food {
   householdId?: ID
   createdBy?: ID
   recipeId?: ID
+  /** Hindi name shown to the cook */
+  hi?: string
+  /** raw ingredients for ONE default unit (e.g. 1 katori), used for prep + groceries */
+  ingredients?: Ingredient[]
+  cookNote?: string
+  cookNoteHi?: string
   /** soft-deleted custom foods stay resolvable for old logs */
   archived?: boolean
 }
@@ -259,4 +319,7 @@ export interface DB {
   weightLogs: Record<ID, WeightLog>
   waterLogs: Record<string, WaterLog>
   choices: Record<string, ItemChoice>
+  cooks: Record<ID, Cook>
+  cookLeaves: Record<ID, CookLeave>
+  groceryChecks: Record<string, GroceryCheck>
 }

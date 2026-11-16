@@ -57,7 +57,7 @@ const ALL_TIPS = { intro: true, plannedVsEaten: true, firstTick: true, sharing: 
 
 export function buildDemo() {
   const db: DB = emptyDB()
-  const { buildLog, newMember, uniqueCode, seedPlan } = _internals
+  const { buildLog, newMember, uniqueCode, seedPlan, insertCook } = _internals
   const householdId = 'hh_demo'
   const s = newMember(db, householdId, { name: 'Samridhi', profile: SAMRIDHI_PROFILE() }, 'owner', 0)
   const n = newMember(db, householdId, { name: 'Naina', profile: NAINA_PROFILE() }, 'member', 1)
@@ -71,8 +71,20 @@ export function buildDemo() {
     code: uniqueCode(db),
     createdBy: s.userId,
     createdAt: new Date().toISOString(),
+    mealTimes: { breakfast: '08:30', lunch: '13:30', snack: '17:00', dinner: '20:30' },
   }
   seedPlan(db, householdId)
+  const cook = insertCook(db, householdId, {
+    name: 'Sunita',
+    language: 'hi',
+    visits: [
+      { label: 'Morning', time: '07:45', slots: ['breakfast', 'lunch'] },
+      { label: 'Evening', time: '18:30', slots: ['snack', 'dinner'] },
+    ],
+    weeklyOff: [],
+  })
+  const leaveId = 'leave_demo'
+  db.cookLeaves[leaveId] = { id: leaveId, cookId: cook.id, date: addDays(todayISO(), 3), note: 'Going to my village', createdBy: cook.id, createdAt: new Date().toISOString() }
 
   const foods = allFoods(db)
   const rand = mulberry32(42)

@@ -13,7 +13,8 @@ import type { HouseholdMember, WeightLog } from '@/data/types'
 import { useSession } from '@/hooks/useSession'
 import { WEEKDAY_SHORT, addDays, daysBetween, fmtShortDate, fromISO, startOfWeek, todayISO, weekDates } from '@/lib/dates'
 import { weekReview } from '@/lib/summary'
-import { cn, fmtNum } from '@/lib/utils'
+import { DailyBars, LineChart, MacroBar, MealGrid } from '@/components/charts'
+import { fmtNum } from '@/lib/utils'
 
 export function ProgressScreen() {
   const { db, member, partner, nameOf } = useSession()
@@ -34,6 +35,31 @@ export function ProgressScreen() {
   const canPro = isMine || sh.protein
   const canMeals = isMine || sh.mealCompletion || sh.fullLog
   const canFoods = isMine || sh.fullLog
+  const [trendMetric, setTrendMetric] = useState<'protein' | 'kcal'>('protein')
+
+  // Both people's protein as % of their own target (one shared axis, no dual scales).
+  const together = useMemo(() => {
+    if (!partner || !partner.sharing.protein) return null
+    return [me, partner].map((m) => {
+      const rv = m.userId === who.userId ? r : weekReview(db, m, dates)
+      return {
+        name: nameOf(m.userId),
+        values: rv.daily.map((d) => (d.logged ? (d.protein / m.profile.proteinTarget) * 100 : null)),
+        color: m.hue % 2 === 0 ? 'rgb(var(--c1))' : 'rgb(var(--c2))',
+      }
+    })
+  }, [db, me, partner, r, who.userId, weekStart])
+
+  const trend = useMemo(() => {
+    const starts = [-21, -14, -7, 0].map((n) => addDays(weekStart, n))
+    const reviews = starts.map((st) => weekReview(db, who, weekDates(st)))
+    if (reviews.filter((x) => x.loggedDays > 0).length < 2) return null
+    return {
+      labels: starts.map((st) => fmtShortDate(st)),
+      protein: reviews.map((x) => (x.loggedDays ? x.avgProtein : null)),
+      kcal: reviews.map((x) => (x.loggedDays ? x.avgKcal : null)),
+    }
+  }, [db, who, weekStart])
 
   return (
     <div className="px-4">
@@ -100,7 +126,65 @@ export function ProgressScreen() {
             {canFoods && <Tile label="Veg variety" value={`${r.veg.length}`} sub={`different vegetables${r.fruit.length ? ` · ${r.fruit.length} fruits` : ''}`} />}
           </div>
 
-          {canPro && <ProteinChart daily={r.daily} min={who.profile.proteinMin} target={who.profile.proteinTarget} />}
+          {canCal && (
+            <DailyBars
+              title="Calories per day"
+              testId="chart-kcal"
+              days={r.daily.map((d) => ({ value: d.kcal, logged: d.logged }))}
+              target={who.profile.calorieTarget}
+              band={[0.9, 1.1]}
+              unit="kcal"
+              barClass="bg-ink/80"
+            />
+          )}
+          {canPro && (
+            <DailyBars
+              title="Protein per day"
+              testId="chart-protein"
+              days={r.daily.map((d) => ({ value: d.protein, logged: d.logged }))}
+              target={who.profile.proteinTarget}
+              marker={who.profile.proteinMin}
+              unit="g"
+              barClass="bg-chart-1"
+            />
+          )}
+          {canMeals && <MealGrid grid={r.slotGrid} />}
+          {(isMine || (sh.calories && sh.protein)) && <MacroBar protein={r.avgProtein} carbs={r.avgCarbs} fat={r.avgFat} />}
+          {isMine && together && (
+            <LineChart
+              title="Both of you · protein"
+              testId="chart-together"
+              labels={WEEKDAY_SHORT.map((d) => d.charAt(0))}
+              series={together}
+              refLine={100}
+              refLabel="100% of own target"
+              format={(v) => `${Math.round(v)}%`}
+              footer="Each line is protein as a % of that person’s own target, so different goals compare fairly."
+            />
+          )}
+          {canPro && trend && (
+            <div>
+              <Segmented
+                size="sm"
+                className="mb-2"
+                value={trendMetric}
+                onChange={setTrendMetric}
+                options={[
+                  { value: 'protein', label: 'Protein trend' },
+                  ...(canCal ? [{ value: 'kcal' as const, label: 'Calorie trend' }] : []),
+                ]}
+              />
+              <LineChart
+                title="Last 4 weeks · daily average"
+                testId="chart-trend"
+                labels={trend.labels}
+                series={[{ name: trendMetric === 'protein' ? 'Protein' : 'Calories', values: trendMetric === 'protein' ? trend.protein : trend.kcal, color: trendMetric === 'protein' ? 'rgb(var(--c1))' : 'rgb(var(--ink))' }]}
+                refLine={trendMetric === 'protein' ? who.profile.proteinMin : who.profile.calorieTarget}
+                refLabel={trendMetric === 'protein' ? `${who.profile.proteinMin} g` : `${fmtNum(who.profile.calorieTarget)} kcal`}
+                format={(v) => (trendMetric === 'protein' ? `${Math.round(v)} g` : `${fmtNum(v)} kcal`)}
+              />
+            </div>
+          )}
 
           {canFoods && r.topFoods.length > 0 && (
             <section className="rounded-3xl border border-line/80 bg-card p-4 shadow-soft">
@@ -158,60 +242,6 @@ function Tile({ label, value, sub }: { label: string; value: string; sub?: strin
       <p className="mt-1 font-display text-[24px] font-medium leading-none tabular">{value}</p>
       {sub && <p className="mt-1.5 text-[12px] text-ink-mute">{sub}</p>}
     </div>
-  )
-}
-
-function ProteinChart({ daily, min, target }: { daily: { date: string; protein: number; logged: boolean }[]; min: number; target: number }) {
-  const [sel, setSel] = useState<number | null>(null)
-  const max = Math.max(target * 1.15, ...daily.map((d) => d.protein))
-  const H = 120
-  const y = (v: number) => H - (v / max) * H
-  return (
-    <section className="rounded-3xl border border-line/80 bg-card p-4 shadow-soft" aria-label="Protein per day">
-      <div className="flex items-baseline justify-between">
-        <h2 className="text-[13px] font-semibold uppercase tracking-[0.1em] text-ink-mute">Protein per day</h2>
-        <span className="text-[12px] text-ink-mute tabular">
-          {sel !== null && daily[sel].logged ? (
-            <>
-              <b className="text-ink">{WEEKDAY_SHORT[sel]}</b> · {Math.round(daily[sel].protein)} g
-            </>
-          ) : (
-            `dashed line = ${min} g`
-          )}
-        </span>
-      </div>
-      <div className="relative mt-3" style={{ height: H + 22 }}>
-        <div className="absolute inset-x-0 border-t border-dashed border-ink-mute/50" style={{ top: y(min) }} />
-        <div className="absolute inset-x-0 border-t border-line" style={{ top: H }} />
-        <div className="absolute inset-0 grid grid-cols-7 gap-2">
-          {daily.map((d, i) => {
-            const h = d.logged ? Math.max(3, (d.protein / max) * H) : 0
-            const hit = d.protein >= min
-            return (
-              <button
-                key={d.date}
-                className="relative flex flex-col items-center justify-end focus-ring rounded-lg"
-                style={{ height: H + 22 }}
-                onClick={() => setSel(sel === i ? null : i)}
-                onMouseEnter={() => setSel(i)}
-                onMouseLeave={() => setSel(null)}
-                aria-label={`${WEEKDAY_SHORT[i]}: ${d.logged ? `${Math.round(d.protein)} grams protein` : 'not logged'}`}
-              >
-                <span className="relative flex w-full justify-center" style={{ height: H }}>
-                  <motion.span
-                    className={cn('absolute bottom-0 w-[60%] max-w-[22px] rounded-t-[4px]', hit ? 'bg-clay' : 'bg-clay/45', sel === i && 'ring-2 ring-ink/20')}
-                    initial={{ height: 0 }}
-                    animate={{ height: h }}
-                    transition={{ delay: i * 0.03, type: 'spring', stiffness: 160, damping: 22 }}
-                  />
-                </span>
-                <span className={cn('mt-1.5 text-[11px] font-semibold', sel === i ? 'text-ink' : 'text-ink-mute')}>{WEEKDAY_SHORT[i].charAt(0)}</span>
-              </button>
-            )
-          })}
-        </div>
-      </div>
-    </section>
   )
 }
 

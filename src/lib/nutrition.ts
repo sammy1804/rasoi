@@ -84,8 +84,12 @@ export const PORTION_LABEL: Record<PortionStyle, string> = {
 
 // ——— Personal portions ———
 
+/** Things you can't serve half of: a cook makes whole chillas and boils whole eggs. */
+const COUNTABLE = new Set(['chapati', 'chilla', 'white', 'egg', 'slice', 'idli', 'dosa', 'paratha', 'cutlet', 'samosa', 'biscuit', 'square', 'piece', 'medium', 'nut'])
+
 function smartRound(amount: number, unit: string | undefined): number {
   if (unit === 'g' || unit === 'ml') return Math.max(5, round(amount, 5))
+  if (unit && COUNTABLE.has(unit)) return Math.max(1, Math.round(amount))
   if (amount >= 2) return Math.max(0.5, round(amount, 0.5))
   return Math.max(0.25, round(amount, 0.25))
 }

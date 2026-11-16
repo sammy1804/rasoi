@@ -1,5 +1,5 @@
 import { AnimatePresence, motion, type PanInfo } from 'framer-motion'
-import { ArrowLeftRight, Check, Droplet, Eye, Lock, Minus, Pencil, Plus, Sparkles, UserPlus, X } from 'lucide-react'
+import { ArrowLeftRight, Check, ChefHat, Droplet, MessageCircle, Eye, Lock, Minus, Pencil, Plus, Sparkles, UserPlus, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useDay } from '@/app/DayContext'
@@ -12,8 +12,9 @@ import { StatusCheck } from '@/components/StatusCheck'
 import { useToast } from '@/components/Toast'
 import { Button } from '@/components/ui/button'
 import { ProgressBar } from '@/components/ui/progress'
-import { allFoods, clearPlanLog, markTip, setWater, upsertLog } from '@/data/repository'
-import type { FoodLog, HouseholdMember, ISODate, MealSlot } from '@/data/types'
+import { allFoods, clearPlanLog, cookIsOff, markTip, setWater, upsertLog } from '@/data/repository'
+import { cookMessage, fmtTime, whatsappUrl } from '@/lib/kitchen'
+import type { Cook, FoodLog, HouseholdMember, ISODate, MealSlot } from '@/data/types'
 import { useSession } from '@/hooks/useSession'
 import { addDays, fmtLongDate, relativeDayLabel, todayISO, weekDates } from '@/lib/dates'
 import { fmtQty, fmtRange } from '@/lib/format'
@@ -167,6 +168,8 @@ export function HomeScreen() {
         )}
       </div>
 
+      {isMine && s.cooks[0] && date >= todayISO() && date <= addDays(todayISO(), 1) && <KitchenStrip cook={s.cooks[0]} date={date} />}
+
       <motion.div
         drag="x"
         dragConstraints={{ left: 0, right: 0 }}
@@ -312,6 +315,40 @@ export function HomeScreen() {
 }
 
 /* ——————————————— Pieces ——————————————— */
+
+function KitchenStrip({ cook, date }: { cook: Cook; date: ISODate }) {
+  const { db, nameOf } = useSession()
+  const navigate = useNavigate()
+  const off = cookIsOff(db, cook, date)
+  const isToday = date === todayISO()
+  const msg = cookMessage(db, cook, date, nameOf)
+  return (
+    <div className={cn('mt-3 flex items-center gap-3 rounded-2xl border px-3 py-2.5', off.off ? 'border-clay/30 bg-clay-soft' : 'border-line/80 bg-card')} data-testid="kitchen-strip">
+      <span className={cn('grid h-9 w-9 shrink-0 place-items-center rounded-full', off.off ? 'bg-clay text-clay-on' : 'bg-sand text-ink-soft')}>
+        <ChefHat size={17} />
+      </span>
+      <button onClick={() => navigate('/week', { state: { section: 'cook' } })} className="min-w-0 flex-1 text-left">
+        <span className={cn('block truncate text-[14px] font-semibold', off.off && 'text-clay-deep')}>
+          {off.off ? `${cook.name} is off ${isToday ? 'today' : 'tomorrow'}` : `${cook.name} · ${cook.visits.map((v) => fmtTime(v.time)).join(' & ')}`}
+        </span>
+        <span className={cn('block truncate text-[12px]', off.off ? 'text-clay-deep/80' : 'text-ink-mute')}>
+          {off.off ? off.leave?.note ?? (off.reason === 'weekly' ? 'Weekly day off' : 'Marked as not coming') : `${isToday ? 'Today' : 'Tomorrow'}’s menu is ready to send`}
+        </span>
+      </button>
+      {!off.off && (
+        <a
+          href={whatsappUrl(msg, cook.phone)}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-wa px-3 text-[13px] font-semibold text-white focus-ring"
+          aria-label={`Send ${isToday ? 'today' : 'tomorrow'}’s menu to ${cook.name} on WhatsApp`}
+        >
+          <MessageCircle size={15} /> Send
+        </a>
+      )}
+    </div>
+  )
+}
 
 function PersonTab({ member, name, sub, active, view, onClick }: { member: HouseholdMember; name: string; sub?: string; active: boolean; view: DayView; onClick: () => void }) {
   const h = hueOf(member.hue)

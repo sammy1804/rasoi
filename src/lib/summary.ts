@@ -129,7 +129,11 @@ export interface WeekReview {
   fruit: string[]
   proteinDays: number
   calorieDays: number
+  avgCarbs: number
+  avgFat: number
   daily: { date: ISODate; kcal: number; protein: number; logged: boolean }[]
+  /** per day, per meal slot: 2 = done, 1 = partly, 0 = nothing logged, null = still ahead */
+  slotGrid: (0 | 1 | 2 | null)[][]
 }
 
 export function weekReview(db: DB, member: HouseholdMember, dates: ISODate[]): WeekReview {
@@ -143,6 +147,9 @@ export function weekReview(db: DB, member: HouseholdMember, dates: ISODate[]): W
   let mealsPossible = 0
   let proteinDays = 0
   let calorieDays = 0
+  let sumC = 0
+  let sumF = 0
+  const slotGrid: WeekReview['slotGrid'] = []
   const skipped: Record<MealSlot, number> = { breakfast: 0, lunch: 0, snack: 0, dinner: 0 }
   const counts = new Map<string, number>()
   const produce = new Set<string>()
@@ -150,9 +157,11 @@ export function weekReview(db: DB, member: HouseholdMember, dates: ISODate[]): W
   for (const date of dates) {
     if (date > today) {
       daily.push({ date, kcal: 0, protein: 0, logged: false })
+      slotGrid.push([null, null, null, null])
       continue
     }
     const v = dayView(db, member, date)
+    slotGrid.push(v.slots.map((sl) => (sl.done ? 2 : sl.eatenCount > 0 ? 1 : 0)))
     const has = v.logs.some((l) => l.status !== 'skipped')
     daily.push({ date, kcal: v.totals.kcal, protein: v.totals.protein, logged: has })
     mealsPossible += 4
@@ -164,6 +173,8 @@ export function weekReview(db: DB, member: HouseholdMember, dates: ISODate[]): W
     logged++
     sumK += v.totals.kcal
     sumP += v.totals.protein
+    sumC += v.totals.carbs
+    sumF += v.totals.fat
     if (v.totals.protein >= p.proteinMin) proteinDays++
     if (v.totals.kcal >= p.calorieTarget * 0.9 && v.totals.kcal <= p.calorieTarget * 1.1) calorieDays++
     for (const l of v.logs) {
@@ -192,6 +203,9 @@ export function weekReview(db: DB, member: HouseholdMember, dates: ISODate[]): W
     fruit: all.filter((x) => FRUITS.has(x)).sort(),
     proteinDays,
     calorieDays,
+    avgCarbs: logged ? sumC / logged : 0,
+    avgFat: logged ? sumF / logged : 0,
     daily,
+    slotGrid,
   }
 }

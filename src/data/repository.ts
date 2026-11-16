@@ -3,7 +3,12 @@ import { joinCode, uid } from '@/lib/utils'
 import { BUILTIN_FOOD_MAP } from './foods'
 import { SEED_PLAN, toSpec } from './mealPlanSeed'
 import { commit, emptyDB, getDB, replaceDB, setSessionUserId } from './store'
+import { weekdayOf } from '@/lib/dates'
 import type {
+  Cook,
+  CookLanguage,
+  CookLeave,
+  CookVisit,
   DB,
   Food,
   FoodLog,
@@ -124,7 +129,21 @@ function newMember(draft: DB, householdId: ID, person: NewPerson, role: 'owner' 
   return { userId, memberId }
 }
 
-export function createHousehold(person: NewPerson, householdName: string): { householdId: ID; code: string } {
+export const DEFAULT_MEAL_TIMES: Record<MealSlot, string> = { breakfast: '08:30', lunch: '13:30', snack: '17:00', dinner: '20:30' }
+
+export interface CookInput {
+  name: string
+  phone?: string
+  language: CookLanguage
+  visits: Omit<CookVisit, 'id'>[]
+  weeklyOff: Weekday[]
+}
+
+export function createHousehold(
+  person: NewPerson,
+  householdName: string,
+  opts: { mealTimes?: Record<MealSlot, string>; cook?: CookInput } = {},
+): { householdId: ID; code: string } {
   let result = { householdId: '', code: '' }
   let newUserId = ''
   commit((draft) => {
@@ -137,8 +156,10 @@ export function createHousehold(person: NewPerson, householdName: string): { hou
       code,
       createdBy: userId,
       createdAt: new Date().toISOString(),
+      mealTimes: opts.mealTimes ?? { ...DEFAULT_MEAL_TIMES },
     }
     seedPlan(draft, householdId)
+    if (opts.cook) insertCook(draft, householdId, opts.cook)
     result = { householdId, code }
     newUserId = userId
   })
@@ -493,5 +514,151 @@ export function resetAll() {
   setSessionUserId(null)
 }
 
+/* ———————————————————— Kitchen: cook, leave, meal times, groceries ———————————————————— */
+
+export function cooksOf(db: DB, householdId: ID): Cook[] {
+  return Object.values(db.cooks)
+    .filter((c) => c.householdId === householdId)
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+}
+
+export function cookForUser(db: DB, userId: ID | null): Cook | undefined {
+  if (!userId) return undefined
+  return Object.values(db.cooks).find((c) => c.userId === userId)
+}
+
+export function normalisePhone(raw: string | undefined): string | undefined {
+  const digits = (raw ?? '').replace(/\D/g, '')
+  if (!digits) return undefined
+  // assume India when a 10-digit mobile number is typed
+  if (digits.length === 10) return '91' + digits
+  return digits.replace(/^0+/, '')
+}
+
+function insertCook(draft: DB, householdId: ID, input: CookInput, userId?: ID): Cook {
+  const id = uid('cook')
+  const cook: Cook = {
+    id,
+    householdId,
+    name: input.name.trim(),
+    phone: normalisePhone(input.phone),
+    language: input.language,
+    visits: input.visits.map((v) => ({ ...v, id: uid('visit') })),
+    weeklyOff: input.weeklyOff,
+    userId,
+    createdAt: new Date().toISOString(),
+  }
+  draft.cooks[id] = cook
+  return cook
+}
+
+export function addCook(householdId: ID, input: CookInput): Cook {
+  let cook!: Cook
+  commit((d) => {
+    cook = insertCook(d, householdId, input)
+  })
+  return cook
+}
+
+export function updateCook(cookId: ID, patch: Partial<Omit<Cook, 'id' | 'householdId'>>) {
+  commit((d) => {
+    const c = d.cooks[cookId]
+    if (!c) return
+    Object.assign(c, patch)
+    if ('phone' in patch) c.phone = normalisePhone(patch.phone)
+  })
+}
+
+export function removeCook(cookId: ID) {
+  commit((d) => {
+    delete d.cooks[cookId]
+    for (const [k, l] of Object.entries(d.cookLeaves)) if (l.cookId === cookId) delete d.cookLeaves[k]
+  })
+}
+
+/** The cook signs in with the household code. Claims an existing cook profile, or creates one. */
+export function joinAsCook(code: string, input: CookInput, claimCookId?: ID): { error?: 'not-found' } {
+  const db = getDB()
+  const household = findHouseholdByCode(db, code)
+  if (!household) return { error: 'not-found' }
+  let userId = ''
+  commit((d) => {
+    userId = uid('user')
+    d.users[userId] = { id: userId, name: input.name.trim(), createdAt: new Date().toISOString() }
+    const existing = claimCookId ? d.cooks[claimCookId] : undefined
+    if (existing && existing.householdId === household.id) {
+      existing.userId = userId
+      existing.name = input.name.trim() || existing.name
+      existing.phone = normalisePhone(input.phone) ?? existing.phone
+      existing.language = input.language
+      existing.visits = input.visits.map((v) => ({ ...v, id: uid('visit') }))
+      existing.weeklyOff = input.weeklyOff
+    } else {
+      insertCook(d, household.id, input, userId)
+    }
+  })
+  setSessionUserId(userId)
+  return {}
+}
+
+/** Use this device as the cook's (e.g. a shared kitchen phone). */
+export function signInAsCook(cookId: ID) {
+  let userId = ''
+  commit((d) => {
+    const c = d.cooks[cookId]
+    if (!c) return
+    if (!c.userId || !d.users[c.userId]) {
+      c.userId = uid('user')
+      d.users[c.userId] = { id: c.userId, name: c.name, createdAt: new Date().toISOString() }
+    }
+    userId = c.userId
+  })
+  if (userId) setSessionUserId(userId)
+}
+
+export function leavesOf(db: DB, cookId: ID): CookLeave[] {
+  return Object.values(db.cookLeaves)
+    .filter((l) => l.cookId === cookId)
+    .sort((a, b) => a.date.localeCompare(b.date))
+}
+
+/** Is the cook coming on this date? Weekly off days and marked leave both count. */
+export function cookIsOff(db: DB, cook: Cook, date: ISODate): { off: boolean; reason?: 'weekly' | 'leave'; leave?: CookLeave } {
+  const leave = Object.values(db.cookLeaves).find((l) => l.cookId === cook.id && l.date === date)
+  if (leave) return { off: true, reason: 'leave', leave }
+  if (cook.weeklyOff.includes(weekdayOf(date))) return { off: true, reason: 'weekly' }
+  return { off: false }
+}
+
+export function addCookLeave(cookId: ID, dates: ISODate[], createdBy: ID, note?: string) {
+  commit((d) => {
+    for (const date of dates) {
+      if (Object.values(d.cookLeaves).some((l) => l.cookId === cookId && l.date === date)) continue
+      const id = uid('leave')
+      d.cookLeaves[id] = { id, cookId, date, note: note?.trim() || undefined, createdBy, createdAt: new Date().toISOString() }
+    }
+  })
+}
+
+export function removeCookLeave(leaveId: ID) {
+  commit((d) => {
+    delete d.cookLeaves[leaveId]
+  })
+}
+
+export function updateMealTimes(householdId: ID, mealTimes: Record<MealSlot, string>) {
+  commit((d) => {
+    if (d.households[householdId]) d.households[householdId].mealTimes = mealTimes
+  })
+}
+
+export const groceryKey = (householdId: ID, weekStart: ISODate, item: string) => `${householdId}|${weekStart}|${item}`
+
+export function setGroceryChecked(householdId: ID, weekStart: ISODate, item: string, checked: boolean) {
+  commit((d) => {
+    d.groceryChecks[groceryKey(householdId, weekStart, item)] = { householdId, weekStart, item, checked }
+  })
+}
+
 /** Internals shared with the demo builder. */
-export const _internals = { buildLog, newMember, uniqueCode, seedPlan }
+export const _internals = { buildLog, newMember, uniqueCode, seedPlan, insertCook }

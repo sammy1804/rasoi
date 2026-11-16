@@ -5,6 +5,7 @@ import { IS_MOBILE_PAGE } from '@/app/target'
 import { BottomNav } from '@/components/BottomNav'
 import { ToastProvider } from '@/components/Toast'
 import { useSession } from '@/hooks/useSession'
+import { CookApp } from '@/screens/CookApp'
 import { HomeScreen } from '@/screens/Home'
 import { InviteScreen } from '@/screens/Invite'
 import { JoinGate } from '@/screens/JoinGate'
@@ -15,8 +16,9 @@ import { ProgressScreen } from '@/screens/Progress'
 import { WeekScreen } from '@/screens/Week'
 
 function Shell() {
-  const { member } = useSession()
+  const { member, cook } = useSession()
   const location = useLocation()
+  if (!member && cook) return <CookApp />
   if (!member) return <Navigate to="/welcome" replace />
   return (
     <div className="mx-auto min-h-dvh w-full max-w-md bg-paper sm:border-x sm:border-line/60">

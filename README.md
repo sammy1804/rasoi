@@ -48,6 +48,15 @@ Or tap **Try demo** on the welcome screen. It loads Samridhi and Naina with two 
 | Progress | Weekly review: average calories and protein, protein days, meals completed, most-skipped meal, most-eaten foods and vegetable variety. Optional weight is shown as weekly or monthly averages, and weight is never shown to the other person. |
 | Sharing | Each person chooses what the other sees: full log, calories, protein and/or meal completion. |
 
+## Kitchen: cook, groceries, WhatsApp
+
+- **Your cook** (Week → Cook, or during onboarding): name, WhatsApp number, Hindi or English, when they come and which meals, regular day off. Mark days they're not coming; Home shows it.
+- **What to cook, how much**: Rasoi adds up both people's portions (e.g. *Chapati — 5: Samridhi 2, Naina 3*), shows the main raw ingredient (*≈ 200 g paneer*) and reminds about soaking rajma/chhole the night before.
+- **Cook's own screen**: the cook joins with the household code ("I'm the cook · मैं खाना बनाती हूँ") and sees a big-text Today / Tomorrow / Week menu in Hindi or English, and can mark days off and change timings.
+- **WhatsApp**: one tap opens WhatsApp with today's (or tomorrow's, or the week's) menu typed in — to the cook's chat, or pick your house group.
+- **Groceries**: the week's shopping list from your plan, grouped and sized for both of you, tick-off as you buy, share on WhatsApp, and a Zepto search button per item. (Zepto has no public API, so items can't be added to the cart automatically.)
+- **Graphs** on Progress: calories and protein per day, meal-completion grid, where calories come from, both of you side by side, and a 4-week trend.
+
 ## Data layer
 
 ```

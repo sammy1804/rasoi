@@ -40,6 +40,14 @@ Shared 7-day meal planner + food tracker for two people (Samridhi and Naina). Re
 - `src/lib/nutrition.ts` (portions, targets, ramp), `src/lib/summary.ts` (day view, insights, weekly review).
 - `src/screens/*` — Onboarding, Invite, Home, Week, Log, Progress, Profile.
 
+## Kitchen: cook, groceries, WhatsApp, Zepto
+
+- **Cook** (`Cook`, `CookLeave` in `types.ts`; actions in `repository.ts`): name, WhatsApp number, Hindi/English, visits (time + which meals), weekly off, marked leave. Family manages it in Week → Cook. The cook joins with the household code ("I'm the cook") and gets `src/screens/CookApp.tsx`: big text, Today/Tomorrow/Week, "I'm not coming", "My timings". Joining claims the existing cook profile instead of duplicating it.
+- **What to cook**: `src/lib/kitchen.ts` → `cookSlots` adds up both people's personal portions per dish (e.g. 5 chapatis = 2 + 3), with the main raw ingredient ("≈ 200 g paneer") and soak reminders for tomorrow. Hindi names, cook notes and raw ingredients per serving live in `src/data/kitchen.ts`. Countable items (chapati, chilla, eggs) are always whole numbers.
+- **WhatsApp**: `cookMessage` / `weekMenuMessage` / `groceryMessage` build the text; buttons open `https://wa.me/<number>?text=…` (cook's chat) or `wa.me/?text=…` (pick the house group). Automatic group posting needs Meta's WhatsApp Business Groups API (business account, server, webhooks): not possible from the phone page.
+- **Zepto**: no public API exists (checked Nov 2026), so there are no keys to connect. Groceries are generated from the week's plan; each line opens Zepto search (`zeptoSearchUrl`). If Zepto ever publishes a cart API, plug it in there.
+- **Graphs** (`src/components/charts.tsx`): calories/protein per day, meal-completion grid, macro split, both-people protein (% of own target, one axis), 4-week trend. Chart colours are the validated `--c1/--c2/--c3` tokens; don't add colours without re-running the dataviz palette validator.
+
 ## Product rules (from the user — keep them)
 
 - Same household meal, different portions per person. Samridhi: lighter, egg whites only, ~1,650 kcal, 75–90 g protein. Naina: hearty, gradual breakfast ramp, 65–75+ g protein.
@@ -52,4 +60,6 @@ Shared 7-day meal planner + food tracker for two people (Samridhi and Naina). Re
 
 - Don't use `AnimatePresence mode="wait"` for step/page transitions — it got stuck unmounting. Use enter-only keyed `motion.div`.
 - The Home swipe area swallows the click that ends a drag (`onClickCapture`); keep that when editing it.
-- Data on the phone link lives in that phone's browser only. Two phones don't share data until the Supabase layer exists.
+- Data on the phone link lives in that phone's browser only. Two phones (or the cook's own phone) don't share data until a sync layer exists. Options: the artifact `db` capability (everyone needs a claude.ai account and access to the link) or Supabase on a normal web host (the phone page can't call outside hosts).
+- `scripts/smoke.cjs` must kill the preview server's whole process group (`detached` + `process.kill(-pid)`), or the port stays busy.
+- `npx tsx --tsconfig tsconfig.json scripts/kitchen-preview.ts [YYYY-MM-DD]` prints the demo cook's WhatsApp message (EN + HI) and the grocery list — handy when changing kitchen logic.

@@ -20,6 +20,8 @@ export default {
           on: 'rgb(var(--on-clay) / <alpha-value>)',
         },
         danger: { DEFAULT: 'rgb(var(--danger) / <alpha-value>)', bg: 'rgb(var(--danger-bg) / <alpha-value>)' },
+        wa: 'rgb(var(--wa) / <alpha-value>)',
+        chart: { 1: 'rgb(var(--c1) / <alpha-value>)', 2: 'rgb(var(--c2) / <alpha-value>)', 3: 'rgb(var(--c3) / <alpha-value>)' },
         water: { DEFAULT: 'rgb(var(--water) / <alpha-value>)', fill: 'rgb(var(--water-fill) / <alpha-value>)' },
         hue0: { bg: 'rgb(var(--h0-bg) / <alpha-value>)', fg: 'rgb(var(--h0-fg) / <alpha-value>)', solid: 'rgb(var(--h0-solid) / <alpha-value>)' },
         hue1: { bg: 'rgb(var(--h1-bg) / <alpha-value>)', fg: 'rgb(var(--h1-fg) / <alpha-value>)', solid: 'rgb(var(--h1-solid) / <alpha-value>)' },

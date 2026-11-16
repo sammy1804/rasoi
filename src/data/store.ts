@@ -31,6 +31,9 @@ export function emptyDB(): DB {
     weightLogs: {},
     waterLogs: {},
     choices: {},
+    cooks: {},
+    cookLeaves: {},
+    groceryChecks: {},
   }
 }
 
