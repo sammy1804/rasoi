@@ -10,7 +10,7 @@ import { Segmented } from '@/components/ui/segmented'
 import { Stepper } from '@/components/ui/stepper'
 import { Switch } from '@/components/ui/switch'
 import { NAINA_PROFILE, SAMRIDHI_PROFILE, buildDemo } from '@/data/demo'
-import { DEFAULT_MEAL_TIMES, checkJoin, cooksOf, createHousehold, findHouseholdByCode, joinAsCook, joinHousehold, membersOf, switchUser, type CookInput } from '@/data/repository'
+import { DEFAULT_MEAL_TIMES, checkJoin, cooksOf, createHousehold, findHouseholdByCode, joinAsCook, joinHousehold, membersOf, signInAsCook, switchUser, type CookInput } from '@/data/repository'
 import { VisitsEditor, WeeklyOffPicker } from '@/components/kitchen'
 import { CookForm, MealTimesEditor, emptyCook } from './Kitchen'
 import { hueOf } from '@/app/meta'
@@ -186,7 +186,8 @@ export function Onboarding({ initialCode }: { initialCode?: string }) {
   const cookHousehold = code ? findHouseholdByCode(db, code) : undefined
   const join = mode === 'cook' && familyJoin ? { ...familyJoin, household: cookHousehold, error: cookHousehold ? undefined : familyJoin.error } : familyJoin
   const joinOwner = join?.members[0]
-  const unclaimedCooks = cookHousehold ? cooksOf(db, cookHousehold.id).filter((c) => !c.userId) : []
+  const knownCooks = cookHousehold ? cooksOf(db, cookHousehold.id) : []
+  const unclaimedCooks = knownCooks.filter((c) => !c.userId)
   const cookValid = cookDraft.name.trim().length > 0 && cookDraft.visits.length > 0 && cookDraft.visits.every((v) => v.slots.length > 0)
 
   const finishCook = () => {
@@ -249,6 +250,10 @@ export function Onboarding({ initialCode }: { initialCode?: string }) {
                 onStart={() => {
                   setMode('create')
                   go('choose')
+                }}
+                onCook={() => {
+                  setMode('cook')
+                  go('code')
                 }}
                 onJoin={() => {
                   setMode('join')
@@ -344,21 +349,36 @@ export function Onboarding({ initialCode }: { initialCode?: string }) {
                     </motion.div>
                   )}
                 </AnimatePresence>
+                {mode === 'cook' && knownCooks.length > 0 && (
+                  <div className="mt-5 space-y-2" data-testid="cook-one-tap">
+                    <p className="text-[15px] font-semibold text-ink-soft">आप कौन हैं? · Who are you?</p>
+                    {knownCooks.map((c) => (
+                      <button
+                        key={c.id}
+                        onClick={() => {
+                          signInAsCook(c.id)
+                          navigate('/', { replace: true })
+                        }}
+                        className="flex h-[72px] w-full items-center gap-4 rounded-2xl bg-ink px-5 text-left text-paper shadow-soft transition active:scale-[0.98] focus-ring"
+                      >
+                        <span className="grid h-11 w-11 place-items-center rounded-full bg-paper/15 text-[22px]">👩‍🍳</span>
+                        <span className="text-[20px] font-semibold">मैं {c.name} हूँ</span>
+                        <ArrowRight size={22} className="ml-auto" />
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <Footer>
                   <Button
                     size="lg"
                     block
+                    variant={mode === 'cook' && knownCooks.length > 0 ? 'ghost' : 'primary'}
                     disabled={!join || !!join.error}
                     onClick={() => {
-                      if (mode === 'cook' && unclaimedCooks[0] && !claimId) {
-                        const c = unclaimedCooks[0]
-                        setClaimId(c.id)
-                        setCookDraft({ name: c.name, phone: c.phone ? `+${c.phone}` : '', language: c.language, visits: c.visits.map((v) => ({ ...v, slots: [...v.slots] })), weeklyOff: [...c.weeklyOff] })
-                      }
                       next()
                     }}
                   >
-                    {mode === 'cook' ? 'Continue · आगे' : `Join ${join?.household?.name ?? 'household'}`} <ArrowRight size={18} />
+                    {mode === 'cook' ? (knownCooks.length > 0 ? 'कोई और · Someone else' : 'Continue · आगे') : `Join ${join?.household?.name ?? 'household'}`} <ArrowRight size={18} />
                   </Button>
                 </Footer>
               </Screen>
@@ -677,12 +697,14 @@ function portionExample(style: PortionStyle) {
 function Welcome({
   onStart,
   onJoin,
+  onCook,
   onDemo,
   people,
   onContinue,
 }: {
   onStart: () => void
   onJoin: () => void
+  onCook: () => void
   onDemo: () => void
   people: { userId: string; name: string; hue: number; role: string }[]
   onContinue: (userId: string) => void
@@ -738,9 +760,14 @@ function Welcome({
         <Button size="lg" variant={existingName ? 'outline' : 'primary'} block onClick={onStart}>
           Create a shared plan
         </Button>
-        <Button size="lg" variant="ghost" block onClick={onJoin}>
-          <Users size={18} /> I have an invite
-        </Button>
+        <div className="grid grid-cols-2 gap-2">
+          <Button size="lg" variant="secondary" className="px-3 text-[15px]" onClick={onJoin}>
+            <Users size={17} /> I have an invite
+          </Button>
+          <Button size="lg" variant="secondary" className="px-3 text-[15px]" onClick={onCook}>
+            <ChefHat size={17} /> मैं कुक हूँ
+          </Button>
+        </div>
       </div>
     </div>
   )

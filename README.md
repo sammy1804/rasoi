@@ -4,11 +4,11 @@ A shared 7-day meal planner and food tracker for two people who live together. Y
 
 > One kitchen. One meal plan. Your own goals.
 
-## Open it on your phone
+## Open it
 
-**https://claude.ai/artifact/TeKtzRJc1CdJRGS2xTwDfK** (private to you until you share it from the page's Share menu).
+**https://sammy1804.github.io/rasoi/** — the public site. Anyone can open it on any phone; no account needed. It redeploys on every push (GitHub Pages; enable once in repo Settings → Pages → Source: GitHub Actions). Add it to your home screen to use it like an app.
 
-It's a single self-contained page built by `npm run build:mobile`. Your data stays on that phone. Light and dark themes follow your phone's setting.
+Your data stays on your phone. Light and dark themes follow the phone's setting.
 
 ## Run it
 
@@ -48,13 +48,14 @@ Or tap **Try demo** on the welcome screen. It loads Samridhi and Naina with two 
 | Progress | Weekly review: average calories and protein, protein days, meals completed, most-skipped meal, most-eaten foods and vegetable variety. Optional weight is shown as weekly or monthly averages, and weight is never shown to the other person. |
 | Sharing | Each person chooses what the other sees: full log, calories, protein and/or meal completion. |
 
-## Kitchen: cook, groceries, WhatsApp
+## Kitchen: cook, groceries, budget
 
 - **Your cook** (Week → Cook, or during onboarding): name, WhatsApp number, Hindi or English, when they come and which meals, regular day off. Mark days they're not coming; Home shows it.
-- **What to cook, how much**: Rasoi adds up both people's portions (e.g. *Chapati — 5: Samridhi 2, Naina 3*), shows the main raw ingredient (*≈ 200 g paneer*) and reminds about soaking rajma/chhole the night before.
-- **Cook's own screen**: the cook joins with the household code ("I'm the cook · मैं खाना बनाती हूँ") and sees a big-text Today / Tomorrow / Week menu in Hindi or English, and can mark days off and change timings.
-- **WhatsApp**: one tap opens WhatsApp with today's (or tomorrow's, or the week's) menu typed in — to the cook's chat, or pick your house group.
-- **Groceries**: the week's shopping list from your plan, grouped and sized for both of you, tick-off as you buy, share on WhatsApp, and a Zepto search button per item. (Zepto has no public API, so items can't be added to the cart automatically.)
+- **What to cook, how much**: Rasoi adds up both people's portions (*Chapati — 5: Samridhi 2, Naina 3*), shows the main raw ingredient (*≈ 200 g paneer*) and reminds about soaking rajma or chhole the night before.
+- **The cook's link**: the WhatsApp message ends with a link. On her own phone, with no app or login, she sees the menu with pictures and big numbers, can **listen** to it in Hindi or English, and can open a **recipe video** for any dish (your chosen YouTube link, or a search). "Done" and "I'm not coming" send you a WhatsApp message.
+- **Groceries by shop**: fresh items for your next **Zepto** order (pick your order days, e.g. Mon/Wed/Sat), a monthly **DMart** list for staples, and a **Country Delight** plan showing how much milk, curd and paneer to subscribe to. Move any item between shops with ⇄.
+- **Automatic cart**: "Fill my Zepto cart with Claude" hands Claude the exact list; with Zepto's connector added to Claude, it fills your real cart and stops before paying. Instamart works the same way.
+- **Budget**: set a monthly grocery budget, see what the plan costs by shop, correct any price, log orders, and see how the month is going.
 - **Graphs** on Progress: calories and protein per day, meal-completion grid, where calories come from, both of you side by side, and a 4-week trend.
 
 ## Data layer

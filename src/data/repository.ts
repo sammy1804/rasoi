@@ -22,6 +22,9 @@ import type {
   MealSlot,
   PlanItemSpec,
   Profile,
+  Shop,
+  ShopKind,
+  SpendLog,
   RecipeIngredient,
   SharingSettings,
   Weekday,
@@ -652,9 +655,82 @@ export function updateMealTimes(householdId: ID, mealTimes: Record<MealSlot, str
   })
 }
 
-export const groceryKey = (householdId: ID, weekStart: ISODate, item: string) => `${householdId}|${weekStart}|${item}`
+export const DEFAULT_SHOPS: Record<ShopKind, Shop> = {
+  quick: { name: 'Zepto', orderDays: [0, 2, 5] },
+  bulk: { name: 'DMart' },
+  subscription: { name: 'Country Delight' },
+}
 
-export function setGroceryChecked(householdId: ID, weekStart: ISODate, item: string, checked: boolean) {
+export function shopsOf(h: Household | undefined): Record<ShopKind, Shop> {
+  return { ...DEFAULT_SHOPS, ...(h?.shops ?? {}) }
+}
+
+export function updateHousehold(householdId: ID, patch: Partial<Omit<Household, 'id' | 'code' | 'createdBy' | 'createdAt'>>) {
+  commit((d) => {
+    const h = d.households[householdId]
+    if (!h) return
+    Object.assign(h, patch)
+    if ('contactPhone' in patch) h.contactPhone = normalisePhone(patch.contactPhone)
+  })
+}
+
+export function updateShop(householdId: ID, kind: ShopKind, patch: Partial<Shop>) {
+  commit((d) => {
+    const h = d.households[householdId]
+    if (!h) return
+    const shops = shopsOf(h)
+    h.shops = { ...shops, [kind]: { ...shops[kind], ...patch } }
+  })
+}
+
+export function setItemShop(householdId: ID, item: string, kind: ShopKind) {
+  commit((d) => {
+    const h = d.households[householdId]
+    if (h) h.itemShop = { ...(h.itemShop ?? {}), [item]: kind }
+  })
+}
+
+export function setItemPrice(householdId: ID, item: string, price: number) {
+  commit((d) => {
+    const h = d.households[householdId]
+    if (h) h.prices = { ...(h.prices ?? {}), [item]: Math.max(0, price) }
+  })
+}
+
+export function setRecipeVideo(householdId: ID, foodId: ID, url: string) {
+  commit((d) => {
+    const h = d.households[householdId]
+    if (!h) return
+    const next = { ...(h.recipeVideos ?? {}) }
+    if (url.trim()) next[foodId] = url.trim()
+    else delete next[foodId]
+    h.recipeVideos = next
+  })
+}
+
+export function spendOf(db: DB, householdId: ID, month: string): SpendLog[] {
+  return Object.values(db.spendLogs ?? {})
+    .filter((l) => l.householdId === householdId && l.date.startsWith(month))
+    .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt))
+}
+
+export function addSpend(householdId: ID, input: { date: ISODate; shop: SpendLog['shop']; amount: number; note?: string }) {
+  commit((d) => {
+    const id = uid('spend')
+    d.spendLogs = d.spendLogs ?? {}
+    d.spendLogs[id] = { id, householdId, ...input, amount: Math.round(input.amount), note: input.note?.trim() || undefined, createdAt: new Date().toISOString() }
+  })
+}
+
+export function deleteSpend(id: ID) {
+  commit((d) => {
+    delete d.spendLogs[id]
+  })
+}
+
+export const groceryKey = (householdId: ID, weekStart: string, item: string) => `${householdId}|${weekStart}|${item}`
+
+export function setGroceryChecked(householdId: ID, weekStart: string, item: string, checked: boolean) {
   commit((d) => {
     d.groceryChecks[groceryKey(householdId, weekStart, item)] = { householdId, weekStart, item, checked }
   })

@@ -11,7 +11,7 @@
     "plan:totals": "tsx --tsconfig tsconfig.json scripts/plan-totals.ts",
     "build:mobile": "tsc --noEmit -p . && vite build --mode artifact",
     "preview:mobile": "vite preview --outDir dist-mobile --port 4174",
-    "smoke": "npm run build:mobile && node scripts/smoke.cjs"
+    "smoke": "npm run build && npm run build:mobile && node scripts/smoke.cjs"
   },
   "dependencies": {
     "@fontsource-variable/fraunces": "^5.3.0",

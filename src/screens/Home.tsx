@@ -13,7 +13,7 @@ import { useToast } from '@/components/Toast'
 import { Button } from '@/components/ui/button'
 import { ProgressBar } from '@/components/ui/progress'
 import { allFoods, clearPlanLog, cookIsOff, markTip, setWater, upsertLog } from '@/data/repository'
-import { cookMessage, fmtTime, whatsappUrl } from '@/lib/kitchen'
+import { buildCookDay, cookMessage, fmtTime, whatsappUrl } from '@/lib/kitchen'
 import type { Cook, FoodLog, HouseholdMember, ISODate, MealSlot } from '@/data/types'
 import { useSession } from '@/hooks/useSession'
 import { addDays, fmtLongDate, relativeDayLabel, todayISO, weekDates } from '@/lib/dates'
@@ -317,11 +317,11 @@ export function HomeScreen() {
 /* ——————————————— Pieces ——————————————— */
 
 function KitchenStrip({ cook, date }: { cook: Cook; date: ISODate }) {
-  const { db, nameOf } = useSession()
+  const { db } = useSession()
   const navigate = useNavigate()
   const off = cookIsOff(db, cook, date)
   const isToday = date === todayISO()
-  const msg = cookMessage(db, cook, date, nameOf)
+  const msg = cookMessage(buildCookDay(db, cook, date))
   return (
     <div className={cn('mt-3 flex items-center gap-3 rounded-2xl border px-3 py-2.5', off.off ? 'border-clay/30 bg-clay-soft' : 'border-line/80 bg-card')} data-testid="kitchen-strip">
       <span className={cn('grid h-9 w-9 shrink-0 place-items-center rounded-full', off.off ? 'bg-clay text-clay-on' : 'bg-sand text-ink-soft')}>

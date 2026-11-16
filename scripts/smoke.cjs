@@ -10,12 +10,11 @@ const { spawn } = require('node:child_process')
 const path = require('node:path')
 const { chromium, devices } = require('playwright')
 
-const PORT = 4175
-const URL = `http://localhost:${PORT}/`
+const URL = 'http://localhost:4175/'
 const root = path.resolve(__dirname, '..')
 
-function startServer() {
-  const proc = spawn('npx', ['vite', 'preview', '--outDir', 'dist-mobile', '--port', String(PORT), '--strictPort'], { cwd: root, stdio: 'pipe', detached: true })
+function startServer(outDir = 'dist-mobile', PORT = 4175) {
+  const proc = spawn('npx', ['vite', 'preview', '--outDir', outDir, '--port', String(PORT), '--strictPort'], { cwd: root, stdio: 'pipe', detached: true })
   let log = ''
   return new Promise((resolve, reject) => {
     const t = setTimeout(() => {
@@ -149,7 +148,26 @@ function expect(cond, msg) {
       await page.getByRole('radio', { name: 'Groceries' }).click()
       await page.waitForTimeout(300)
       const zepto = await page.getByRole('link', { name: /on Zepto/ }).count()
-      expect(zepto > 5, `only ${zepto} Zepto links`)
+      expect(zepto > 3, `only ${zepto} Zepto links`)
+      await page.getByTestId('order-with-claude').click()
+      const prompt = await page.getByTestId('order-prompt').innerText()
+      expect(prompt.includes('Zepto connector') && /1\. /.test(prompt), 'order prompt for Claude is missing the list')
+      await page.keyboard.press('Escape')
+      await page.waitForTimeout(400)
+    })
+
+    await step('Groceries split by shop, and the budget tracks an order', async () => {
+      await page.getByRole('radio', { name: 'DMart' }).click()
+      expect((await page.getByTestId('bulk-card').innerText()).includes('staples'), 'monthly staples list missing')
+      await page.getByRole('radio', { name: 'Country Delight' }).click()
+      expect((await page.getByTestId('subscription-card').count()) === 1, 'subscription plan missing')
+      await page.getByRole('radio', { name: 'Budget' }).click()
+      await page.getByRole('button', { name: /Log an order/ }).click()
+      await page.getByRole('spinbutton', { name: 'Amount paid' }).fill('640')
+      await page.getByRole('button', { name: 'Save' }).click()
+      await page.waitForTimeout(400)
+      expect((await page.getByTestId('budget-card').innerText()).includes('₹640'), 'logged order not counted in the budget')
+      expect((await page.getByTestId('chart-cost').count()) === 1, 'cost chart missing')
     })
 
     await step('Mark the cook off tomorrow', async () => {
@@ -164,13 +182,9 @@ function expect(cond, msg) {
     await step('Cook joins with the code and sees her menu', async () => {
       await page.getByRole('link', { name: 'Profile' }).click()
       await page.getByRole('button', { name: /Sign out/ }).click()
-      await page.getByRole('button', { name: /I have an invite/ }).click()
-      await page.getByRole('button', { name: /I’m the cook/ }).click()
-      await page.getByRole('button', { name: /Continue/ }).click()
+      await page.getByRole('button', { name: /मैं कुक हूँ/ }).click()
       await page.getByRole('textbox').fill(code)
-      await page.getByRole('button', { name: /Continue · आगे/ }).click()
-      await page.getByRole('button', { name: /Continue · आगे/ }).click()
-      await page.getByRole('button', { name: /See today’s menu/ }).click()
+      await page.getByRole('button', { name: /मैं Sunita हूँ/ }).click()
       await page.waitForTimeout(400)
       expect((await page.getByTestId('cook-app').count()) === 1, 'cook interface not shown')
       const cooks = await page.evaluate(() => Object.keys(JSON.parse(localStorage['rasoi:db:v1']).cooks).length)
@@ -226,13 +240,46 @@ function expect(cond, msg) {
           await check(t)
         }
         await p.getByRole('link', { name: 'Week' }).click()
-        for (const sec of ['Groceries', 'Cook']) {
+        for (const sec of ['Groceries', 'Budget', 'Cook']) {
           await p.getByRole('radio', { name: sec }).click()
           await check(sec)
         }
         await p.getByRole('button', { name: /Open Sunita’s view/ }).click()
         await check('cook view')
         await c.close()
+      }
+    })
+
+    // The public site (hash-routed build): the cook's link opens with no login.
+    await step('Cook link from the WhatsApp message opens on the public site', async () => {
+      const web = await startServer('dist', 4176)
+      try {
+        const c = await browser.newContext({ ...devices['iPhone 13'] })
+        const p = await c.newPage()
+        watch(p)
+        await p.goto('http://localhost:4176/')
+        await p.getByRole('button', { name: 'Try demo' }).click()
+        await p.getByRole('link', { name: 'Week' }).click()
+        await p.getByRole('radio', { name: 'Cook' }).click()
+        await p.getByRole('radio', { name: 'Tomorrow' }).click()
+        const href = await p.getByRole('link', { name: /Share to group|Share on WhatsApp/ }).first().getAttribute('href')
+        const text = decodeURIComponent(href.split('?text=')[1])
+        const link = text.match(/https?:\/\/\S+#\/c\/\S+/)
+        expect(link, 'no cook link in the WhatsApp message')
+        const fresh = await browser.newContext({ ...devices['iPhone 13'] }) // a different phone: no stored data
+        const cp = await fresh.newPage()
+        watch(cp)
+        await cp.goto(link[0].replace(/^https?:\/\/[^/]+\/(rasoi\/)?/, 'http://localhost:4176/'))
+        await cp.getByTestId('cook-link').waitFor({ timeout: 8000 })
+        expect((await cp.getByTestId('cook-menu').count()) === 1, 'menu not shown from the link')
+        expect((await cp.getByRole('link', { name: /वीडियो देखें|Watch how to make/ }).count()) > 0, 'no recipe video buttons')
+        expect((await cp.getByRole('button', { name: /सुनें|Listen/ }).count()) > 0, 'no listen buttons')
+        const reply = await cp.getByRole('link', { name: /बन गया|Done/ }).getAttribute('href')
+        expect(reply.startsWith('https://wa.me/'), 'done button does not open WhatsApp')
+        await c.close()
+        await fresh.close()
+      } finally {
+        stop(web)
       }
     })
 

@@ -37,6 +37,42 @@ export interface Household {
   createdAt: string
   /** When the household usually eats, 'HH:MM' 24h. Optional for older data. */
   mealTimes?: Record<MealSlot, string>
+  /** Where groceries come from. */
+  shops?: Record<ShopKind, Shop>
+  /** per-item override of which shop it's bought from */
+  itemShop?: Record<string, ShopKind>
+  /** per-item price override, ₹ per kg / litre / piece */
+  prices?: Record<string, number>
+  /** monthly grocery budget in ₹ */
+  budgetMonthly?: number
+  /** a family WhatsApp number the cook can reply to (digits with country code) */
+  contactPhone?: string
+  /** family-chosen recipe video per dish (food id → YouTube link) */
+  recipeVideos?: Record<ID, string>
+}
+
+/**
+ * subscription = comes by itself every day (e.g. Country Delight milk, paneer)
+ * quick        = quick-commerce orders a few times a week (Zepto, Instamart)
+ * bulk         = big monthly shop for staples (DMart)
+ */
+export type ShopKind = 'subscription' | 'quick' | 'bulk'
+export const SHOP_KINDS: ShopKind[] = ['quick', 'bulk', 'subscription']
+
+export interface Shop {
+  name: string
+  /** quick only: which weekdays you usually order */
+  orderDays?: Weekday[]
+}
+
+export interface SpendLog {
+  id: ID
+  householdId: ID
+  date: ISODate
+  shop: ShopKind | 'other'
+  amount: number
+  note?: string
+  createdAt: string
 }
 
 export type CookLanguage = 'en' | 'hi'
@@ -77,7 +113,8 @@ export interface CookLeave {
 /** A ticked-off grocery line for a given week. */
 export interface GroceryCheck {
   householdId: ID
-  weekStart: ISODate
+  /** the shopping period: an order date for quick orders, 'YYYY-MM' for the monthly shop */
+  weekStart: string
   item: string
   checked: boolean
 }
@@ -322,4 +359,5 @@ export interface DB {
   cooks: Record<ID, Cook>
   cookLeaves: Record<ID, CookLeave>
   groceryChecks: Record<string, GroceryCheck>
+  spendLogs: Record<ID, SpendLog>
 }

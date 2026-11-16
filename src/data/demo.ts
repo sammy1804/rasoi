@@ -72,7 +72,22 @@ export function buildDemo() {
     createdBy: s.userId,
     createdAt: new Date().toISOString(),
     mealTimes: { breakfast: '08:30', lunch: '13:30', snack: '17:00', dinner: '20:30' },
+    budgetMonthly: 12000,
   }
+  // a few grocery orders so the budget has something to show
+  const spends: [number, 'quick' | 'bulk' | 'subscription', number, string][] = [
+    [14, 'bulk', 2380, 'DMart · monthly staples'],
+    [12, 'quick', 640, 'Zepto · veggies + fruit'],
+    [9, 'quick', 710, 'Zepto · veggies + eggs'],
+    [7, 'subscription', 1890, 'Country Delight · fortnight'],
+    [5, 'quick', 580, 'Zepto · veggies'],
+    [2, 'quick', 690, 'Zepto · veggies + fruit'],
+  ]
+  spends.forEach(([back, shop, amount, note], i) => {
+    const date = addDays(todayISO(), -back)
+    if (!date.startsWith(todayISO().slice(0, 7))) return
+    db.spendLogs[`spend_demo${i}`] = { id: `spend_demo${i}`, householdId, date, shop, amount, note, createdAt: new Date(Date.now() - back * 864e5).toISOString() }
+  })
   seedPlan(db, householdId)
   const cook = insertCook(db, householdId, {
     name: 'Sunita',

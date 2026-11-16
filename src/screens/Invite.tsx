@@ -6,7 +6,7 @@ import { Avatar } from '@/components/Avatar'
 import { useToast } from '@/components/Toast'
 import { Button } from '@/components/ui/button'
 import { useSession } from '@/hooks/useSession'
-import { IS_MOBILE_PAGE } from '@/app/target'
+import { IS_MOBILE_PAGE, publicLink } from '@/app/target'
 
 /** What "Copy" puts on the clipboard: a link on the web build, a code message on the mobile page. */
 export function inviteText(code: string, householdName: string) {
@@ -15,7 +15,7 @@ export function inviteText(code: string, householdName: string) {
 }
 
 export function inviteLink(code: string) {
-  return `${window.location.origin}/join/${code}`
+  return publicLink(`/join/${code}`)
 }
 
 export async function copyText(text: string): Promise<boolean> {

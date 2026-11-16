@@ -1,93 +1,132 @@
-import { CalendarOff, Copy, MessageCircle, Moon, Plus, Trash2, X } from 'lucide-react'
+import { CalendarOff, Copy, MessageCircle, Moon, Play, Plus, Square, Trash2, Volume2, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { SLOT_META } from '@/app/meta'
 import { Button } from '@/components/ui/button'
 import { Chip } from '@/components/ui/chip'
 import { Field, Input } from '@/components/ui/field'
 import { Sheet } from '@/components/ui/sheet'
-import { addCookLeave, cookIsOff, leavesOf, removeCookLeave } from '@/data/repository'
+import { addCookLeave, leavesOf, removeCookLeave } from '@/data/repository'
 import type { Cook, CookLanguage, CookVisit, DB, ISODate, MealSlot, Weekday } from '@/data/types'
 import { MEAL_SLOTS } from '@/data/types'
 import { WEEKDAY_SHORT, addDays, fmtShortDate, relativeDayLabel, todayISO, weekdayOf } from '@/lib/dates'
 import {
   SLOT_EN,
   SLOT_HI,
-  cookSlots,
-  cookVisits,
   dayLabel,
   dishName,
+  dishSpeech,
   fmtTime,
-  qtyFor,
-  soakFor,
+  perLine,
+  qtyText,
+  soakText,
+  type CookDay,
   usesLine,
+  videoUrl,
   visitLabel,
+  visitSpeech,
   whatsappUrl,
 } from '@/lib/kitchen'
-import { ITEM_HI } from '@/data/kitchen'
+import { useSpeech } from '@/lib/speech'
 import { cn } from '@/lib/utils'
 import { copyText } from '@/screens/Invite'
 import { useToast } from './Toast'
 
 /* ——————————— The cook's menu for one day ——————————— */
 
-export function CookMenu({ db, cook, date, lang, nameOf }: { db: DB; cook: Cook; date: ISODate; lang: CookLanguage; nameOf: (id: string) => string }) {
+/**
+ * Made to be followed without reading: a picture and a big number for every dish,
+ * a listen button that reads it aloud, and a recipe video one tap away.
+ */
+export function CookDayView({ day, lang }: { day: CookDay; lang: CookLanguage }) {
   const hi = lang === 'hi'
-  const off = cookIsOff(db, cook, date)
-  const visits = cookVisits(cook, cookSlots(db, cook.householdId, date, nameOf))
-  const soak = soakFor(db, cook.householdId, addDays(date, 1))
+  const { supported, speaking, speak } = useSpeech()
 
-  if (off.off) {
+  if (day.off) {
     return (
       <div className="rounded-3xl border border-dashed border-line px-5 py-8 text-center" data-testid="cook-off">
         <CalendarOff className="mx-auto text-ink-mute" size={26} />
-        <p className="mt-3 text-[18px] font-semibold">{hi ? 'आज छुट्टी है' : 'Day off'}</p>
+        <p className="mt-3 text-[20px] font-semibold">{hi ? 'आज छुट्टी है' : 'Day off'}</p>
         <p className="mt-1 text-[15px] text-ink-soft">
-          {off.reason === 'weekly' ? (hi ? 'यह आपकी साप्ताहिक छुट्टी है।' : 'Regular weekly day off.') : off.leave?.note ?? (hi ? 'छुट्टी दर्ज है।' : 'Marked as not coming.')}
+          {day.off.reason === 'weekly' ? (hi ? 'यह आपकी साप्ताहिक छुट्टी है।' : 'Regular weekly day off.') : day.off.note ?? (hi ? 'छुट्टी दर्ज है।' : 'Marked as not coming.')}
         </p>
       </div>
     )
   }
 
+  const Listen = ({ id, text, big }: { id: string; text: string; big?: boolean }) =>
+    supported ? (
+      <button
+        onClick={() => speak(id, text, lang)}
+        aria-label={hi ? 'सुनें' : 'Listen'}
+        aria-pressed={speaking === id}
+        className={cn(
+          'inline-flex shrink-0 items-center justify-center gap-1.5 rounded-full font-semibold transition active:scale-95 focus-ring',
+          big ? 'h-11 px-4 text-[15px]' : 'h-10 w-10',
+          speaking === id ? 'bg-clay text-clay-on' : 'bg-sand text-ink',
+        )}
+      >
+        {speaking === id ? <Square size={big ? 15 : 14} fill="currentColor" /> : <Volume2 size={big ? 18 : 17} />}
+        {big && (speaking === id ? (hi ? 'रोकें' : 'Stop') : hi ? 'सुनें' : 'Listen')}
+      </button>
+    ) : null
+
   return (
     <div className="space-y-4" data-testid="cook-menu">
-      {visits.map(({ visit, slots }) => (
-        <section key={visit.id} className="overflow-hidden rounded-3xl border border-line/80 bg-card shadow-soft">
-          <header className="flex items-baseline justify-between border-b border-line/70 px-5 py-3.5">
-            <h3 className="font-display text-[22px] font-medium">{visitLabel(visit, lang)}</h3>
-            <span className="text-[17px] font-semibold tabular">{fmtTime(visit.time)}</span>
+      {day.visits.map((v, vi) => (
+        <section key={vi} className="overflow-hidden rounded-3xl border border-line/80 bg-card shadow-soft">
+          <header className="flex items-center gap-3 border-b border-line/70 px-4 py-3">
+            <div className="min-w-0 flex-1">
+              <h3 className="font-display text-[23px] font-medium leading-tight">{visitLabel(v, lang)}</h3>
+              <p className="text-[15px] font-semibold text-ink-soft tabular">{fmtTime(v.time)}</p>
+            </div>
+            <Listen id={`v${vi}`} text={visitSpeech(v, day, lang)} big />
           </header>
-          {slots.every((s) => !s.dishes.length && !s.ready.length) && <p className="px-5 py-4 text-ink-mute">{hi ? 'कुछ नहीं' : 'Nothing planned'}</p>}
-          {slots.map((s) =>
+          {v.slots.every((s) => !s.dishes.length && !s.ready.length) && <p className="px-5 py-4 text-ink-mute">{hi ? 'कुछ नहीं' : 'Nothing planned'}</p>}
+          {v.slots.map((s) =>
             !s.dishes.length && !s.ready.length ? null : (
-              <div key={s.slot} className="border-t border-line/60 px-5 py-3.5 first-of-type:border-t-0">
-                <p className="mb-2 flex items-center gap-2 text-[13px] font-bold uppercase tracking-[0.08em] text-ink-soft">
+              <div key={s.slot} className="border-t border-line/60 px-4 py-3.5 first-of-type:border-t-0">
+                <p className="mb-2.5 flex items-center gap-2 text-[13px] font-bold uppercase tracking-[0.08em] text-ink-soft">
                   <span className={cn('h-2.5 w-2.5 rounded-full', SLOT_META[s.slot].dot)} />
                   {hi ? SLOT_HI[s.slot] : SLOT_EN[s.slot]}
                   {s.time && <span className="font-semibold normal-case tracking-normal text-ink-mute">· {hi ? 'खाने का समय' : 'eat at'} {fmtTime(s.time)}</span>}
                 </p>
                 {s.dishes.length === 0 && <p className="text-[16px] text-ink-soft">{hi ? 'कुछ पकाना नहीं है' : 'Nothing to cook'}</p>}
-                <ul className="space-y-3">
+                <ul className="space-y-3.5">
                   {s.dishes.map((d) => {
-                    const note = [usesLine(d, lang), hi ? d.food.cookNoteHi : d.food.cookNote].filter(Boolean).join(' · ')
+                    const note = [usesLine(d, lang), hi ? d.noteHi : d.note].filter(Boolean).join(' · ')
+                    const per = perLine(d, day.people, lang)
                     return (
-                      <li key={d.food.id}>
-                        <div className="flex items-baseline justify-between gap-3">
-                          <span className={cn('text-[19px] font-semibold leading-snug', d.optional && 'text-ink-soft')}>
-                            {dishName(d.food, lang)}
-                            {d.optional && <span className="ml-2 text-[13px] font-medium text-ink-mute">{hi ? 'अगर चाहिए' : 'optional'}</span>}
-                          </span>
-                          <span className="shrink-0 text-[19px] font-bold tabular">{qtyFor(d.food, d.total, d.unit, lang)}</span>
+                      <li key={d.id} className="flex gap-3">
+                        <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-sand text-[30px] leading-none" aria-hidden>
+                          {d.emoji}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-baseline justify-between gap-2">
+                            <span className={cn('text-[19px] font-semibold leading-snug', d.optional && 'text-ink-soft')}>{dishName(d, lang)}</span>
+                            <span className="shrink-0 text-[21px] font-bold tabular">{qtyText(d.total, d.unit, lang)}</span>
+                          </div>
+                          {d.optional && <p className="text-[13px] font-medium text-ink-mute">{hi ? 'अगर चाहिए' : 'optional'}</p>}
+                          {per && <p className="text-[14px] text-ink-soft">{per}</p>}
+                          {note && <p className="text-[14px] text-ink-mute">{note}</p>}
+                          <div className="mt-2 flex items-center gap-2">
+                            <Listen id={`${vi}-${s.slot}-${d.id}`} text={dishSpeech(d, day.people, lang)} />
+                            <a
+                              href={videoUrl(d, lang)}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex h-10 items-center gap-1.5 rounded-full bg-sand px-3.5 text-[14px] font-semibold text-ink transition active:scale-95 focus-ring"
+                              aria-label={`${hi ? 'वीडियो देखें' : 'Watch how to make'} ${dishName(d, lang)}`}
+                            >
+                              <Play size={15} fill="currentColor" /> {hi ? 'वीडियो' : 'Video'}
+                            </a>
+                          </div>
                         </div>
-                        {d.per.length > 1 && (
-                          <p className="text-[14px] text-ink-soft">{d.per.map((p) => `${p.name} ${qtyFor(d.food, p.amount, d.unit, lang)}`).join(' · ')}</p>
-                        )}
-                        {note && <p className="text-[14px] text-ink-mute">{note}</p>}
                       </li>
                     )
                   })}
                 </ul>
                 {s.ready.length > 0 && (
-                  <p className="mt-2 text-[14px] text-ink-mute">
+                  <p className="mt-3 text-[14px] text-ink-mute">
                     {hi ? 'साथ में दें' : 'Also serve'}: {s.ready.map((f) => dishName(f, lang)).join(', ')}
                   </p>
                 )}
@@ -96,13 +135,11 @@ export function CookMenu({ db, cook, date, lang, nameOf }: { db: DB; cook: Cook;
           )}
         </section>
       ))}
-      {soak.length > 0 && (
-        <div className="flex gap-3 rounded-2xl bg-clay-soft px-4 py-3.5 text-clay-deep">
-          <Moon size={20} className="mt-0.5 shrink-0" />
-          <p className="text-[16px] font-semibold leading-snug">
-            {hi ? 'आज रात भिगोएँ (कल के लिए): ' : 'Soak tonight for tomorrow: '}
-            {soak.map((x) => `${hi ? ITEM_HI[x.item] ?? x.item : x.item} ${x.qty} ${hi ? 'ग्राम' : 'g'}`).join(', ')}
-          </p>
+      {day.soak.length > 0 && (
+        <div className="flex items-center gap-3 rounded-2xl bg-clay-soft px-4 py-3.5 text-clay-deep">
+          <Moon size={22} className="shrink-0" />
+          <p className="flex-1 text-[16px] font-semibold leading-snug">{soakText(day, lang)}</p>
+          <Listen id="soak" text={soakText(day, lang)} />
         </div>
       )}
     </div>

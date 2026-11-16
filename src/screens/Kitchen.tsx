@@ -1,21 +1,20 @@
-import { CalendarOff, ChefHat, Clock, ExternalLink, Pencil, Phone, Smartphone, UserPlus } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { CalendarOff, ChefHat, ChevronRight, Clock, ExternalLink, Pencil, Phone, Smartphone, UserPlus, Video } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Avatar } from '@/components/Avatar'
-import { CookMenu, LeaveList, LeaveSheet, VISIT_PRESETS, VisitsEditor, WeeklyOffPicker, WhatsAppButtons, type VisitDraft } from '@/components/kitchen'
+import { CookDayView, LeaveList, LeaveSheet, VISIT_PRESETS, VisitsEditor, WeeklyOffPicker, WhatsAppButtons, type VisitDraft } from '@/components/kitchen'
 import { useToast } from '@/components/Toast'
 import { Button } from '@/components/ui/button'
 import { Field, Input } from '@/components/ui/field'
 import { Segmented } from '@/components/ui/segmented'
 import { Sheet } from '@/components/ui/sheet'
-import { Switch } from '@/components/ui/switch'
-import { DEFAULT_MEAL_TIMES, addCook, cookIsOff, groceryKey, removeCook, setGroceryChecked, signInAsCook, updateCook, updateMealTimes, type CookInput } from '@/data/repository'
-import { zeptoSearchUrl } from '@/data/kitchen'
+import { DEFAULT_MEAL_TIMES, addCook, cookIsOff, allFoods, planOf, removeCook, setRecipeVideo, signInAsCook, updateCook, updateHousehold, updateMealTimes, type CookInput } from '@/data/repository'
+import { READY_TO_SERVE } from '@/data/kitchen'
 import type { Cook, CookLanguage, MealSlot, Weekday } from '@/data/types'
 import { MEAL_SLOTS } from '@/data/types'
 import { useSession } from '@/hooks/useSession'
-import { addDays, fmtShortDate, startOfWeek, todayISO, weekDates } from '@/lib/dates'
-import { GROUP_ORDER, cookMessage, fmtGroceryQty, fmtTime, groceryList, groceryMessage, visitLabel, weekMenuMessage } from '@/lib/kitchen'
+import { addDays, todayISO, weekDates } from '@/lib/dates'
+import { buildCookDay, cookMessage, fmtTime, videoUrl, visitLabel, weekMenuMessage } from '@/lib/kitchen'
 import { SLOT_META } from '@/app/meta'
 import { cn, uid } from '@/lib/utils'
 import { TimingsSheet } from './CookApp'
@@ -23,13 +22,15 @@ import { TimingsSheet } from './CookApp'
 /* ——————————————— Cook ——————————————— */
 
 export function CookPanel() {
-  const { db, member, household, cooks, nameOf } = useSession()
+  const { db, member, household, cooks } = useSession()
   const navigate = useNavigate()
   const toast = useToast()
   const cook = cooks[0]
   const [editing, setEditing] = useState(false)
   const [leaveOpen, setLeaveOpen] = useState(false)
   const [timesOpen, setTimesOpen] = useState(false)
+  const [videos, setVideos] = useState(false)
+  const [replyOpen, setReplyOpen] = useState(false)
   const [day, setDay] = useState<'today' | 'tomorrow'>(() => (new Date().getHours() >= 20 ? 'tomorrow' : 'today'))
   const [lang, setLang] = useState<CookLanguage>(cook?.language ?? 'hi')
   useEffect(() => {
@@ -60,7 +61,8 @@ export function CookPanel() {
 
   const date = day === 'today' ? todayISO() : addDays(todayISO(), 1)
   const off = cookIsOff(db, cook, date)
-  const msg = cookMessage(db, cook, date, nameOf, lang)
+  const cookDay = buildCookDay(db, cook, date, lang)
+  const msg = cookMessage(cookDay, lang)
   const week = weekDates(todayISO()).filter((d) => d >= todayISO())
 
   return (
@@ -112,11 +114,12 @@ export function CookPanel() {
             { value: 'tomorrow', label: 'Tomorrow' },
           ]}
         />
-        <CookMenu db={db} cook={cook} date={date} lang={lang} nameOf={nameOf} />
+        <CookDayView day={cookDay} lang={lang} />
         {!off.off && (
           <div className="mt-4">
             <p className="mb-2 px-1 text-[13px] text-ink-soft">
-              Send it {cook.phone ? `to ${cook.name}, or to your house group` : 'to your house group'} — WhatsApp opens with the message ready.
+              Send it {cook.phone ? `to ${cook.name}, or to your house group` : 'to your house group'}. The message ends with a link {cook.name} can tap to see this
+              menu with pictures, hear it read aloud and open recipe videos — no app or login needed.
             </p>
             <WhatsAppButtons text={msg} phone={cook.phone} toLabel={`Send to ${cook.name}`} />
             {!cook.phone && (
@@ -138,6 +141,29 @@ export function CookPanel() {
       <section>
         <h2 className="mb-2 px-1 text-[13px] font-semibold uppercase tracking-[0.12em] text-ink-mute">Days off</h2>
         <LeaveList db={db} cook={cook} />
+      </section>
+
+      <section className="overflow-hidden rounded-2xl border border-line/80 bg-card">
+        <button onClick={() => setVideos(true)} className="flex w-full items-center gap-3 px-4 py-3 text-left">
+          <Video size={19} className="shrink-0 text-ink-soft" />
+          <span className="min-w-0 flex-1">
+            <span className="block text-[15px] font-semibold">Recipe videos</span>
+            <span className="block text-[13px] text-ink-mute">
+              {Object.keys(household.recipeVideos ?? {}).length
+                ? `${Object.keys(household.recipeVideos ?? {}).length} chosen · others open a YouTube search`
+                : 'Every dish opens a YouTube search. Pick your favourite video for any dish.'}
+            </span>
+          </span>
+          <ChevronRight size={16} className="text-ink-mute" />
+        </button>
+        <button onClick={() => setReplyOpen(true)} className="flex w-full items-center gap-3 border-t border-line/60 px-4 py-3 text-left">
+          <Phone size={18} className="shrink-0 text-ink-soft" />
+          <span className="min-w-0 flex-1">
+            <span className="block text-[15px] font-semibold">{cook.name}’s replies go to</span>
+            <span className="block text-[13px] text-ink-mute">{household.contactPhone ? `+${household.contactPhone} on WhatsApp` : 'Add your WhatsApp number so “done” and “not coming” reach you'}</span>
+          </span>
+          <ChevronRight size={16} className="text-ink-mute" />
+        </button>
       </section>
 
       <MealTimesCard />
@@ -164,6 +190,8 @@ export function CookPanel() {
       </section>
 
       <CookFormSheet open={editing} onClose={() => setEditing(false)} householdId={household.id} cook={cook} />
+      <RecipeVideosSheet open={videos} onClose={() => setVideos(false)} />
+      <ReplyNumberSheet open={replyOpen} onClose={() => setReplyOpen(false)} householdId={household.id} current={household.contactPhone} />
       <LeaveSheet open={leaveOpen} onClose={() => setLeaveOpen(false)} db={db} cook={cook} byUserId={member.userId} />
       <TimingsSheet open={timesOpen} onClose={() => setTimesOpen(false)} cookId={cook.id} visits={cook.visits} weeklyOff={cook.weeklyOff} />
     </div>
@@ -334,110 +362,69 @@ function CookFormSheet({ open, onClose, householdId, cook }: { open: boolean; on
   )
 }
 
-/* ——————————————— Groceries ——————————————— */
 
-export function GroceriesPanel() {
-  const { db, household } = useSession()
-  const [range, setRange] = useState<'rest' | 'next7'>('rest')
-  const [hideBought, setHideBought] = useState(false)
-  const today = todayISO()
-  const dates = useMemo(
-    () => (range === 'rest' ? weekDates(today).filter((d) => d >= today) : Array.from({ length: 7 }, (_, i) => addDays(today, i + 1))),
-    [range, today],
-  )
-  const lines = useMemo(() => (household ? groceryList(db, household.id, dates) : []), [db, household, dates])
+/* ——————————— Recipe videos & reply number ——————————— */
+
+function RecipeVideosSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { db, household, cooks } = useSession()
   if (!household) return null
-  const weekStart = startOfWeek(dates[0])
-  const isChecked = (item: string) => !!db.groceryChecks[groceryKey(household.id, weekStart, item)]?.checked
-  const fresh = lines.filter((l) => !l.pantry)
-  const bought = lines.filter((l) => isChecked(l.item)).length
-  const title = `Groceries · ${fmtShortDate(dates[0])}–${fmtShortDate(dates[dates.length - 1])}`
-
+  const foods = allFoods(db)
+  const plan = planOf(db, household.id)
+  const ids = new Set<string>()
+  for (const m of Object.values(db.meals)) {
+    if (m.mealPlanId !== plan?.id) continue
+    for (const it of m.items) for (const id of [it.foodId, ...(it.alts?.map((a) => a.foodId) ?? [])]) if (foods[id] && !READY_TO_SERVE.has(id)) ids.add(id)
+  }
+  const list = [...ids].map((id) => foods[id]).sort((a, b) => a.name.localeCompare(b.name))
+  const lang = cooks[0]?.language ?? 'hi'
   return (
-    <div className="space-y-4" data-testid="groceries">
-      <Segmented
-        value={range}
-        onChange={setRange}
-        options={[
-          { value: 'rest', label: 'Rest of this week' },
-          { value: 'next7', label: 'Next 7 days' },
-        ]}
-      />
-      <section className="rounded-3xl border border-line/80 bg-card p-4 shadow-soft">
-        <p className="text-[13px] font-semibold text-ink-soft">{title}</p>
-        <p className="mt-1 font-display text-[22px] font-medium leading-tight">
-          {fresh.length} fresh items <span className="text-ink-mute">· {lines.length - fresh.length} staples to check</span>
-        </p>
-        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-sand">
-          <div className="h-full rounded-full bg-meal-lunch transition-all" style={{ width: `${lines.length ? (bought / lines.length) * 100 : 0}%` }} />
-        </div>
-        <p className="mt-1.5 text-[12px] text-ink-mute tabular">{bought} of {lines.length} ticked off</p>
-        <div className="mt-4">
-          <WhatsAppButtons text={groceryMessage(lines.filter((l) => !isChecked(l.item)), title)} />
-        </div>
-        <p className="mt-3 text-[12px] leading-relaxed text-ink-mute">
-          Amounts are for both of you, from your planned portions. Zepto doesn’t offer an API for adding to a cart, so each item opens Zepto search.
-        </p>
-      </section>
+    <Sheet open={open} onOpenChange={(o) => !o && onClose()} title="Recipe videos" description="Paste a YouTube link for any dish you want made a particular way. Dishes without one open a YouTube search." className="h-[92dvh]">
+      <ul className="space-y-2 pb-3">
+        {list.map((f) => {
+          const saved = household.recipeVideos?.[f.id] ?? ''
+          return (
+            <li key={f.id} className="rounded-2xl border border-line bg-card p-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className="truncate text-[15px] font-semibold">{f.name}</span>
+                <a href={videoUrl({ name: f.name, hi: f.hi, video: saved || undefined }, lang)} target="_blank" rel="noreferrer" className="inline-flex shrink-0 items-center gap-1 text-[13px] font-semibold text-clay">
+                  {saved ? 'Open' : 'Find one'} <ExternalLink size={13} />
+                </a>
+              </div>
+              <Input
+                key={saved}
+                defaultValue={saved}
+                onBlur={(e) => e.target.value.trim() !== saved && setRecipeVideo(household.id, f.id, e.target.value)}
+                placeholder="Paste a YouTube link"
+                inputMode="url"
+                aria-label={`Video link for ${f.name}`}
+                className="mt-2 h-11"
+              />
+            </li>
+          )
+        })}
+      </ul>
+    </Sheet>
+  )
+}
 
-      <div className="flex items-center justify-between px-1">
-        <span className="text-[14px] font-semibold">Hide ticked items</span>
-        <Switch checked={hideBought} onChange={setHideBought} label="Hide ticked items" />
-      </div>
-
-      {GROUP_ORDER.map((g) => {
-        const ls = lines.filter((l) => l.group === g && !(hideBought && isChecked(l.item)))
-        if (!ls.length) return null
-        return (
-          <section key={g}>
-            <h3 className="mb-1.5 px-1 text-[13px] font-semibold uppercase tracking-[0.12em] text-ink-mute">{g}</h3>
-            <ul className="overflow-hidden rounded-2xl border border-line/80 bg-card">
-              {ls.map((l) => {
-                const checked = isChecked(l.item)
-                return (
-                  <li key={l.item} className="flex items-center gap-2 border-t border-line/60 py-1.5 pl-2 pr-2 first:border-t-0">
-                    <button
-                      onClick={() => setGroceryChecked(household.id, weekStart, l.item, !checked)}
-                      className="grid h-10 w-10 shrink-0 place-items-center rounded-full focus-ring"
-                      aria-pressed={checked}
-                      aria-label={`${checked ? 'Untick' : 'Tick'} ${l.item}`}
-                    >
-                      <span className={cn('grid h-6 w-6 place-items-center rounded-md border-2 transition', checked ? 'border-ink bg-ink text-paper' : 'border-line bg-card')}>
-                        {checked && (
-                          <svg viewBox="0 0 24 24" className="h-3.5 w-3.5">
-                            <path d="M5 12.5l4.2 4.2L19 7" fill="none" stroke="currentColor" strokeWidth={3.5} strokeLinecap="round" strokeLinejoin="round" />
-                          </svg>
-                        )}
-                      </span>
-                    </button>
-                    <span className="min-w-0 flex-1 py-1">
-                      <span className={cn('block text-[15px] font-semibold', checked && 'text-ink-mute line-through')}>
-                        {l.item}
-                        {l.soak && <span className="ml-1.5 rounded-full bg-meal-dinner/15 px-1.5 py-px text-[10px] font-bold uppercase tracking-wide text-meal-dinner">soak</span>}
-                      </span>
-                      <span className="block truncate text-[12px] text-ink-mute">
-                        {l.pantry ? 'Check the pantry · ' : ''}for {l.for.slice(0, 3).join(', ')}
-                        {l.for.length > 3 ? ` +${l.for.length - 3}` : ''}
-                      </span>
-                    </span>
-                    <span className="shrink-0 text-[14px] font-semibold tabular">{fmtGroceryQty(l)}</span>
-                    <a
-                      href={zeptoSearchUrl(l.item)}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="ml-1 inline-flex h-9 shrink-0 items-center gap-1 rounded-full bg-sand px-2.5 text-[12px] font-bold text-ink-soft hover:text-ink focus-ring"
-                      aria-label={`Search ${l.item} on Zepto`}
-                    >
-                      Zepto <ExternalLink size={12} />
-                    </a>
-                  </li>
-                )
-              })}
-            </ul>
-          </section>
-        )
-      })}
-      {lines.length === 0 && <p className="rounded-2xl border border-dashed border-line px-4 py-8 text-center text-sm text-ink-mute">Nothing planned for these days.</p>}
-    </div>
+function ReplyNumberSheet({ open, onClose, householdId, current }: { open: boolean; onClose: () => void; householdId: string; current?: string }) {
+  const [v, setV] = useState('')
+  useEffect(() => {
+    if (open) setV(current ? `+${current}` : '')
+  }, [open, current])
+  return (
+    <Sheet
+      open={open}
+      onOpenChange={(o) => !o && onClose()}
+      title="Your WhatsApp number"
+      description="When the cook taps “Done” or “I’m not coming” on her link, the message comes to this number."
+      footer={
+        <Button size="lg" block onClick={() => { updateHousehold(householdId, { contactPhone: v }); onClose() }}>
+          Save
+        </Button>
+      }
+    >
+      <Input type="tel" inputMode="tel" value={v} onChange={(e) => setV(e.target.value)} placeholder="98xxxxxxxx" aria-label="Your WhatsApp number" className="mb-2" />
+    </Sheet>
   )
 }

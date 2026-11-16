@@ -37,7 +37,7 @@ export const KITCHEN: Record<string, K> = {
   'tomato-capsicum': { hi: 'टमाटर शिमला मिर्च', ing: [['Tomato', 45], ['Capsicum', 40]] },
   'cucumber-tomato': { hi: 'खीरा टमाटर', ing: [['Cucumber', 60], ['Tomato', 45]] },
   salad: { hi: 'सलाद', ing: [['Cucumber', 55], ['Tomato', 40], ['Onion', 15]] },
-  cucumber: { hi: 'खीरा', ing: [['Cucumber', 1, 'pc']] },
+  cucumber: { hi: 'खीरा', ing: [['Cucumber', 120]] },
   paneer: { hi: 'पनीर (कसा हुआ)', ing: [['Paneer', 1]] },
   'paneer-bhurji': { hi: 'पनीर भुर्जी', ing: [['Paneer', 85], ['Onion', 30], ['Tomato', 35], ['Capsicum', 15]] },
   'kadai-paneer': { hi: 'कड़ाही पनीर', ing: [['Paneer', 90], ['Capsicum', 35], ['Onion', 30], ['Tomato', 40]] },
@@ -143,13 +143,57 @@ export function groceryGroup(item: string): GroceryGroup {
   return 'Vegetables'
 }
 
-/** What to type into Zepto's search for an item. */
+/** What to type into a store's search for an item. */
 const SEARCH: Record<string, string> = {
   'Baingan (bharta)': 'baingan bharta', 'Patta gobi': 'cabbage', Gobi: 'cauliflower', 'Seasonal fruit': 'fresh fruits',
   'Brown bread (slices)': 'brown bread', 'High-protein dahi': 'high protein curd', 'Kabuli chana': 'kabuli chana',
   'Tender coconut': 'tender coconut', 'Soya chunks': 'soya chunks', 'Toor dal': 'toor dal', Eggs: 'eggs',
 }
-export function zeptoSearchUrl(item: string): string {
-  const q = SEARCH[item] ?? item.replace(/\s*\(.*\)/, '').toLowerCase()
-  return `https://www.zepto.com/search?query=${encodeURIComponent(q)}`
+export const searchTerm = (item: string) => SEARCH[item] ?? item.replace(/\s*\(.*\)/, '').toLowerCase()
+
+/** Quick-commerce stores. `mcp` = the store's own connector for AI assistants, which can fill the cart. */
+export const QUICK_STORES: { name: string; search: (q: string) => string; mcp?: string }[] = [
+  { name: 'Zepto', search: (q) => `https://www.zepto.com/search?query=${encodeURIComponent(q)}`, mcp: 'https://mcp.zepto.co.in/mcp' },
+  { name: 'Instamart', search: (q) => `https://www.swiggy.com/instamart/search?query=${encodeURIComponent(q)}`, mcp: 'https://mcp.swiggy.com/im' },
+  { name: 'Blinkit', search: (q) => `https://blinkit.com/s/?q=${encodeURIComponent(q)}` },
+  { name: 'BigBasket', search: (q) => `https://www.bigbasket.com/ps/?q=${encodeURIComponent(q)}` },
+]
+export const quickStore = (name: string) => QUICK_STORES.find((s) => s.name.toLowerCase() === name.trim().toLowerCase())
+export function storeSearchUrl(storeName: string, item: string): string | undefined {
+  return quickStore(storeName)?.search(searchTerm(item))
+}
+
+/** Comes by subscription by default (e.g. Country Delight). Everything in PANTRY defaults to the monthly shop. */
+export const SUBSCRIPTION_DEFAULT = new Set(['Milk', 'Curd', 'Paneer'])
+
+/**
+ * Rough prices in ₹ per kg (g items), per litre (ml items) or per piece — typical
+ * metro quick-commerce prices. They're only a starting estimate; every price is editable.
+ */
+export const PRICES: Record<string, number> = {
+  // vegetables (₹/kg)
+  Tomato: 50, Onion: 45, Potato: 40, Cucumber: 50, Capsicum: 100, Beetroot: 60, Carrot: 60, 'Baingan (bharta)': 60, Bhindi: 80,
+  'French beans': 100, Gobi: 60, 'Patta gobi': 40, 'Green peas': 120, Broccoli: 160, Spinach: 60, Lauki: 50, 'Moong sprouts': 150,
+  // dairy & eggs
+  Milk: 70, Curd: 100, Paneer: 450, 'High-protein dahi': 280, Eggs: 8, Ghee: 700,
+  // fruit
+  Bananas: 6, Apples: 30, Oranges: 15, Guava: 20, Lemon: 6, 'Tender coconut': 60, Papaya: 60, Pineapple: 80, Watermelon: 30, 'Seasonal fruit': 100,
+  // staples (₹/kg)
+  Rice: 90, Atta: 50, 'Moong dal': 140, 'Chana dal': 100, 'Toor dal': 170, Rajma: 160, 'Kabuli chana': 150, 'Kala chana': 110, Besan: 110,
+  Muesli: 500, Oats: 200, 'Peanut butter': 450, 'Soya chunks': 160, Poha: 80, Suji: 60, Almonds: 900, Cashews: 1000, Peanuts: 160,
+  'Roasted chana': 200, Makhana: 1200,
+  // other
+  'Brown bread (slices)': 3.5, 'Idli batter': 100, 'Dosa batter': 100,
+}
+
+/** A picture for each dish, so the menu can be followed without reading. */
+export const EMOJI: Record<string, string> = {
+  rice: '🍚', chapati: '🫓', paratha: '🫓', bread: '🍞', 'moong-dal': '🍲', 'chana-dal': '🍲', dal: '🍲', 'spinach-dal': '🍲', rajma: '🫘', chhole: '🫘',
+  'kala-chana-chaat': '🥗', 'chhole-chaat': '🥗', 'sprouts-salad': '🥗', salad: '🥗', 'cucumber-tomato': '🥒', cucumber: '🥒', 'tomato-capsicum': '🍅',
+  'beetroot-carrot': '🥕', 'beetroot-sabzi': '🥕', 'baingan-bharta': '🍆', bhindi: '🥬', 'aloo-beans': '🥔', 'patta-gobi-carrot': '🥬', 'patta-gobi': '🥬',
+  gobi: '🥦', 'gobi-peas': '🥦', 'broccoli-stirfry': '🥦', lauki: '🥒', 'onion-capsicum': '🫑', paneer: '🧀', 'paneer-bhurji': '🧀', 'kadai-paneer': '🍛',
+  'paneer-tikka': '🍢', 'paneer-dip': '🥣', 'soya-keema': '🍛', 'soya-crispy': '🥘', 'soya-cutlet': '🥘', 'egg-white': '🥚', 'egg-whole': '🥚', 'egg-white-bhurji': '🍳',
+  'besan-chilla': '🥞', muesli: '🥣', 'oats-milk': '🥣', 'peanut-butter': '🥜', poha: '🍚', upma: '🍚', idli: '⚪', dosa: '🥞', curd: '🥛', 'hp-curd': '🥛', milk: '🥛',
+  buttermilk: '🥛', chai: '☕', coffee: '☕', banana: '🍌', 'watermelon-juice': '🍉', watermelon: '🍉', fruit: '🍎', apple: '🍎', pineapple: '🍍', papaya: '🥭',
+  orange: '🍊', guava: '🍐', 'coconut-water': '🥥', 'lemon-water': '🍋', nuts: '🥜', almonds: '🥜', peanuts: '🥜', 'roasted-chana': '🥜', makhana: '🍿', ghee: '🧈',
 }

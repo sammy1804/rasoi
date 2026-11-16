@@ -25,6 +25,7 @@ export default defineConfig(({ mode }) => {
   }
 
   return {
+    base: './',
     plugins: mobile ? [react(), mobileHtml, viteSingleFile()] : [react()],
     resolve: { alias: { '@': path.resolve(__dirname, 'src') } },
     server: { host: true, port: 5173 },

@@ -2,7 +2,8 @@ import { motion } from 'framer-motion'
 import { ArrowLeftRight, ChevronDown, ChevronRight, Plus, RotateCcw, Trash2 } from 'lucide-react'
 import { useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { CookPanel, GroceriesPanel } from './Kitchen'
+import { CookPanel } from './Kitchen'
+import { BudgetPanel, GroceriesPanel } from './Groceries'
 import { useDay } from '@/app/DayContext'
 import { SLOT_META } from '@/app/meta'
 import { AddFoodSheet } from '@/components/AddFoodSheet'
@@ -22,7 +23,7 @@ import { fmtQty } from '@/lib/format'
 import { PORTION_LABEL, nutrientsFor, personalItems, portionFor } from '@/lib/nutrition'
 import { cn, fmtNum } from '@/lib/utils'
 
-type Section = 'plan' | 'groceries' | 'cook'
+type Section = 'plan' | 'groceries' | 'cook' | 'budget'
 
 export function WeekScreen() {
   const { household, cooks } = useSession()
@@ -35,7 +36,7 @@ export function WeekScreen() {
         <div className="pt-5">
           <p className="text-[13px] font-semibold uppercase tracking-[0.14em] text-ink-mute">{household?.name} · kitchen</p>
           <h1 className="mt-0.5 font-display text-[28px] font-medium tracking-tight">
-            {section === 'plan' ? 'Weekly plan' : section === 'groceries' ? 'Groceries' : cook ? cook.name : 'Your cook'}
+            {section === 'plan' ? 'Weekly plan' : section === 'groceries' ? 'Groceries' : section === 'budget' ? 'Budget' : cook ? cook.name : 'Your cook'}
           </h1>
         </div>
         <Segmented
@@ -46,10 +47,11 @@ export function WeekScreen() {
             { value: 'plan', label: 'Plan' },
             { value: 'groceries', label: 'Groceries' },
             { value: 'cook', label: 'Cook' },
+            { value: 'budget', label: 'Budget' },
           ]}
         />
       </header>
-      <div className="mt-5">{section === 'plan' ? <WeekPlan /> : section === 'groceries' ? <GroceriesPanel /> : <CookPanel />}</div>
+      <div className="mt-5">{section === 'plan' ? <WeekPlan /> : section === 'groceries' ? <GroceriesPanel /> : section === 'budget' ? <BudgetPanel /> : <CookPanel />}</div>
     </div>
   )
 }

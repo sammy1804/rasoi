@@ -1,11 +1,12 @@
 import { motion } from 'framer-motion'
-import { BrowserRouter, MemoryRouter, Navigate, Outlet, Route, Routes, useLocation, useParams } from 'react-router-dom'
+import { HashRouter, MemoryRouter, Navigate, Outlet, Route, Routes, useLocation, useParams } from 'react-router-dom'
 import { DayProvider } from '@/app/DayContext'
 import { IS_MOBILE_PAGE } from '@/app/target'
 import { BottomNav } from '@/components/BottomNav'
 import { ToastProvider } from '@/components/Toast'
 import { useSession } from '@/hooks/useSession'
 import { CookApp } from '@/screens/CookApp'
+import { CookLinkScreen } from '@/screens/CookLink'
 import { HomeScreen } from '@/screens/Home'
 import { InviteScreen } from '@/screens/Invite'
 import { JoinGate } from '@/screens/JoinGate'
@@ -41,8 +42,9 @@ function JoinRoute() {
   return <JoinGate code={(code ?? '').toUpperCase()} />
 }
 
-// The hosted mobile page can't use URL paths, so it routes in memory.
-const Router = IS_MOBILE_PAGE ? MemoryRouter : BrowserRouter
+// The claude.ai phone page can't use URLs, so it routes in memory. The public site uses
+// hash routes (/#/join/CODE) so it works on GitHub Pages or any static host.
+const Router = IS_MOBILE_PAGE ? MemoryRouter : HashRouter
 
 export function App() {
   return (
@@ -54,6 +56,7 @@ export function App() {
             <Route path="/join/:code" element={<JoinRoute />} />
             <Route path="/join" element={<Onboarding initialCode="" />} />
             <Route path="/invite" element={<InviteScreen />} />
+            <Route path="/c/:data" element={<CookLinkScreen />} />
             <Route element={<Shell />}>
               <Route index element={<HomeScreen />} />
               <Route path="/week" element={<WeekScreen />} />

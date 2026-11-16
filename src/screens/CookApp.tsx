@@ -1,7 +1,7 @@
 import { CalendarOff, Clock, LogOut } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { CookMenu, LeaveList, LeaveSheet, VisitsEditor, WeeklyOffPicker, type VisitDraft } from '@/components/kitchen'
+import { CookDayView, LeaveList, LeaveSheet, VisitsEditor, WeeklyOffPicker, type VisitDraft } from '@/components/kitchen'
 import { Button } from '@/components/ui/button'
 import { Segmented } from '@/components/ui/segmented'
 import { Sheet } from '@/components/ui/sheet'
@@ -9,14 +9,14 @@ import { allFoods, cookIsOff, mealFor, signOut, updateCook } from '@/data/reposi
 import type { CookLanguage, Weekday } from '@/data/types'
 import { useSession } from '@/hooks/useSession'
 import { addDays, todayISO, weekDates, weekdayOf } from '@/lib/dates'
-import { SLOT_EN, SLOT_HI, dayLabel, dishName, fmtTime, visitLabel } from '@/lib/kitchen'
+import { SLOT_EN, SLOT_HI, buildCookDay, dayLabel, dishName, fmtTime, visitLabel } from '@/lib/kitchen'
 import { cn, uid } from '@/lib/utils'
 
 type View = 'today' | 'tomorrow' | 'week'
 
 /** The cook's interface: big type, one job — what to cook, how much, when. */
 export function CookApp() {
-  const { db, cook, household, nameOf } = useSession()
+  const { db, cook, household } = useSession()
   const navigate = useNavigate()
   const [view, setView] = useState<View>('today')
   const [leaveOpen, setLeaveOpen] = useState(false)
@@ -75,7 +75,7 @@ export function CookApp() {
       {view !== 'week' ? (
         <>
           <h2 className="mb-3 mt-5 text-[17px] font-semibold">{dayLabel(date, lang)}</h2>
-          <CookMenu db={db} cook={cook} date={date} lang={lang} nameOf={nameOf} />
+          <CookDayView day={buildCookDay(db, cook, date, lang)} lang={lang} />
         </>
       ) : (
         <div className="mt-5 space-y-2">
