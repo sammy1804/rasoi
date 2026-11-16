@@ -80,6 +80,8 @@ function expect(cond, msg) {
       await page.getByRole('button', { name: /Continue/ }).click()
       await page.getByRole('button', { name: /Continue/ }).click()
       await page.getByRole('button', { name: /Looks good/ }).click()
+      await page.getByRole('button', { name: /^Continue/ }).click()
+      await page.getByRole('button', { name: /We cook ourselves/ }).click()
       await page.getByRole('button', { name: /Create household/ }).click()
       code = (await page.getByTestId('join-code').innerText()).trim()
       expect(/^[A-Z0-9]{6}$/.test(code), `bad join code "${code}"`)
@@ -202,6 +204,7 @@ function expect(cond, msg) {
         expect((await page.getByTestId(id).count()) === 1, `${id} missing on Progress`)
       }
       await page.getByRole('link', { name: 'Home' }).click()
+      await page.getByTestId('kitchen-strip').waitFor({ timeout: 5000 }).catch(() => {})
       expect((await page.getByTestId('kitchen-strip').count()) === 1, 'cook strip missing on Home')
     })
     await ctx.close()
