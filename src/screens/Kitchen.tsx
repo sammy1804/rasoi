@@ -14,7 +14,7 @@ import type { Cook, CookLanguage, MealSlot, Weekday } from '@/data/types'
 import { MEAL_SLOTS } from '@/data/types'
 import { useSession } from '@/hooks/useSession'
 import { addDays, todayISO, weekDates } from '@/lib/dates'
-import { buildCookDay, cookMessage, fmtTime, videoUrl, visitLabel, weekMenuMessage } from '@/lib/kitchen'
+import { buildCookDay, buildHouseSnapshot, cookMessage, fmtTime, houseInviteMessage, houseLink, videoUrl, visitLabel, weekMenuMessage } from '@/lib/kitchen'
 import { SLOT_META } from '@/app/meta'
 import { cn, uid } from '@/lib/utils'
 import { TimingsSheet } from './CookApp'
@@ -31,6 +31,15 @@ export function CookPanel() {
   const [timesOpen, setTimesOpen] = useState(false)
   const [videos, setVideos] = useState(false)
   const [replyOpen, setReplyOpen] = useState(false)
+  const [invite, setInvite] = useState('')
+  useEffect(() => {
+    if (!cook) return
+    let live = true
+    houseLink(buildHouseSnapshot(db, cook)).then((link) => live && setInvite(houseInviteMessage(cook.name, household?.name ?? 'Home', link, cook.language)))
+    return () => {
+      live = false
+    }
+  }, [db, cook, household?.name])
   const [day, setDay] = useState<'today' | 'tomorrow'>(() => (new Date().getHours() >= 20 ? 'tomorrow' : 'today'))
   const [lang, setLang] = useState<CookLanguage>(cook?.language ?? 'hi')
   useEffect(() => {
@@ -168,25 +177,35 @@ export function CookPanel() {
 
       <MealTimesCard />
 
-      <section className="rounded-2xl border border-line/80 bg-card p-4">
+      <section className="rounded-2xl border border-line/80 bg-card p-4" data-testid="cook-own-app">
         <p className="flex items-center gap-2 text-[15px] font-semibold">
-          <Smartphone size={17} /> {cook.name}’s own screen
+          <Smartphone size={17} /> {cook.name}’s own app
         </p>
         <p className="mt-1 text-[13px] leading-relaxed text-ink-soft">
-          A big-text view of just what to cook, in {cook.language === 'hi' ? 'Hindi' : 'English'}, where {cook.name} can mark days off and change timings. Use it on a kitchen phone or tablet.
+          {cook.name} has her own Rasoi: she signs up with just her name, adds every house she cooks at, and sees each day’s route, menu and amounts. Send her your
+          house link — tapping it adds <b>{household.name}</b> to her app with this week’s menu.
         </p>
-        <Button
-          variant="secondary"
-          size="sm"
-          className="mt-3"
-          onClick={() => {
-            signInAsCook(cook.id)
-            navigate('/')
-            toast({ text: `This phone now shows ${cook.name}’s view` })
-          }}
-        >
-          Open {cook.name}’s view on this phone
-        </Button>
+        <div className="mt-3">{invite ? <WhatsAppButtons text={invite} phone={cook.phone} toLabel={`Send to ${cook.name}`} /> : <p className="text-[13px] text-ink-mute">Preparing the link…</p>}</div>
+        <p className="mt-3 text-[12px] leading-relaxed text-ink-mute">
+          The link holds a copy of your weekly plan. If you change the plan or her timings, send it again and her app updates. Day-to-day changes still go in the daily WhatsApp menu.
+        </p>
+        <div className="mt-3 flex items-center justify-between gap-3 rounded-xl bg-sand/70 px-3 py-2.5">
+          <span className="min-w-0 text-[12px] text-ink-soft">
+            Family code <b className="ml-1 font-mono text-[15px] tracking-[0.14em] text-ink">{household.code}</b>
+            <span className="block text-ink-mute">Works when she uses Rasoi on this phone</span>
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              signInAsCook(cook.id)
+              navigate('/')
+              toast({ text: `This phone now shows ${cook.name}’s app` })
+            }}
+          >
+            Open her app here
+          </Button>
+        </div>
       </section>
 
       <CookFormSheet open={editing} onClose={() => setEditing(false)} householdId={household.id} cook={cook} />

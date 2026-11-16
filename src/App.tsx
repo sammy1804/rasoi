@@ -8,6 +8,7 @@ import { useSession } from '@/hooks/useSession'
 import { CookApp } from '@/screens/CookApp'
 import { CookLinkScreen } from '@/screens/CookLink'
 import { HomeScreen } from '@/screens/Home'
+import { HouseLinkScreen } from '@/screens/HouseLink'
 import { InviteScreen } from '@/screens/Invite'
 import { JoinGate } from '@/screens/JoinGate'
 import { LogScreen } from '@/screens/Log'
@@ -17,9 +18,9 @@ import { ProgressScreen } from '@/screens/Progress'
 import { WeekScreen } from '@/screens/Week'
 
 function Shell() {
-  const { member, cook } = useSession()
+  const { member, cookAccount } = useSession()
   const location = useLocation()
-  if (!member && cook) return <CookApp />
+  if (!member && cookAccount) return <CookApp />
   if (!member) return <Navigate to="/welcome" replace />
   return (
     <div className="mx-auto min-h-dvh w-full max-w-md bg-paper sm:border-x sm:border-line/60">
@@ -57,6 +58,7 @@ export function App() {
             <Route path="/join" element={<Onboarding initialCode="" />} />
             <Route path="/invite" element={<InviteScreen />} />
             <Route path="/c/:data" element={<CookLinkScreen />} />
+            <Route path="/h/:data" element={<HouseLinkScreen />} />
             <Route element={<Shell />}>
               <Route index element={<HomeScreen />} />
               <Route path="/week" element={<WeekScreen />} />

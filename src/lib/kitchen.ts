@@ -180,8 +180,8 @@ type PackedDish = [id: string, unit: string, per: number[], optional: 0 | 1, vid
 type PackedSlot = [slot: number, time: string | 0, dishes: PackedDish[], ready: string[]]
 type Packed = [v: 1, date: string, household: string, cook: string, lang: CookLanguage, people: string[], reply: string | 0, off: 0 | [string, string | 0], visits: [string, string, PackedSlot[]][], soak: [string, number][]]
 
-export function encodeCookDay(day: CookDay): string {
-  const packed: Packed = [
+function packDay(day: CookDay): Packed {
+  return [
     1,
     day.date,
     day.household,
@@ -206,47 +206,143 @@ export function encodeCookDay(day: CookDay): string {
     ]),
     day.soak,
   ]
-  return b64.enc(JSON.stringify(packed))
 }
+
+function unpackDay(p: Packed): CookDay | null {
+  if (!Array.isArray(p) || p[0] !== 1) return null
+  return {
+    date: p[1],
+    household: p[2],
+    cook: p[3],
+    lang: p[4],
+    people: p[5],
+    reply: p[6] || undefined,
+    off: p[7] ? { reason: p[7][0] as 'weekly' | 'leave', note: p[7][1] || undefined } : undefined,
+    visits: p[8].map(([label, time, slots]) => ({
+      label,
+      time,
+      slots: slots.map(([si, t, dishes, ready]) => ({
+        slot: MEAL_SLOTS[si],
+        time: t || undefined,
+        dishes: dishes.map(([id, unit, per, optional, video, name]) => {
+          const total = per.reduce((a, b) => a + b, 0)
+          const food = BUILTIN_FOOD_MAP[id]
+          if (food) return dishFrom(food, total, unit, per, !!optional, video || undefined)
+          return { id, name: name ?? id, emoji: '🍽️', total, unit, per, optional: !!optional, video: video || undefined }
+        }),
+        ready: ready.map((r) => {
+          const f = BUILTIN_FOOD_MAP[r]
+          return f ? { id: f.id, name: f.name, hi: f.hi } : { id: r, name: r }
+        }),
+      })),
+    })),
+    soak: p[9],
+  }
+}
+
+export const encodeCookDay = (day: CookDay): string => b64.enc(JSON.stringify(packDay(day)))
 
 export function decodeCookDay(data: string): CookDay | null {
   try {
-    const p = JSON.parse(b64.dec(data)) as Packed
-    if (p[0] !== 1) return null
-    return {
-      date: p[1],
-      household: p[2],
-      cook: p[3],
-      lang: p[4],
-      people: p[5],
-      reply: p[6] || undefined,
-      off: p[7] ? { reason: p[7][0] as 'weekly' | 'leave', note: p[7][1] || undefined } : undefined,
-      visits: p[8].map(([label, time, slots]) => ({
-        label,
-        time,
-        slots: slots.map(([si, t, dishes, ready]) => ({
-          slot: MEAL_SLOTS[si],
-          time: t || undefined,
-          dishes: dishes.map(([id, unit, per, optional, video, name]) => {
-            const total = per.reduce((a, b) => a + b, 0)
-            const food = BUILTIN_FOOD_MAP[id]
-            if (food) return dishFrom(food, total, unit, per, !!optional, video || undefined)
-            return { id, name: name ?? id, emoji: '🍽️', total, unit, per, optional: !!optional, video: video || undefined }
-          }),
-          ready: ready.map((r) => {
-            const f = BUILTIN_FOOD_MAP[r]
-            return f ? { id: f.id, name: f.name, hi: f.hi } : { id: r, name: r }
-          }),
-        })),
-      })),
-      soak: p[9],
-    }
+    return unpackDay(JSON.parse(b64.dec(data)) as Packed)
   } catch {
     return null
   }
 }
 
 export const cookLink = (day: CookDay) => publicLink(`/c/${encodeCookDay(day)}`)
+
+/* ════════════════════════ The house link ════════════════════════
+ * How a family adds itself to the cook's own app on her own phone: a link
+ * carrying the house (name, people, her timings) and its menu for each day of
+ * the week. The plan repeats weekly, so one link stays right until the family
+ * changes the plan and sends a new one.
+ */
+
+export interface HouseSnapshot {
+  name: string
+  code?: string
+  cookName: string
+  lang: CookLanguage
+  people: string[]
+  reply?: string
+  visits: { label: string; time: string; slots: MealSlot[] }[]
+  weeklyOff: Weekday[]
+  /** packed days, Monday first, each built as a working day */
+  week: unknown[]
+  at: ISODate
+}
+
+export function buildHouseSnapshot(db: DB, cook: Cook, today = todayISO()): HouseSnapshot {
+  const household = db.households[cook.householdId]
+  const working = { ...cook, weeklyOff: [] as Weekday[] }
+  const noLeave = { ...db, cookLeaves: {} }
+  const days = weekDates(today).map((d) => buildCookDay(noLeave, working, d))
+  return {
+    name: household?.name ?? 'Home',
+    code: household?.code,
+    cookName: cook.name,
+    lang: cook.language,
+    people: days[0].people,
+    reply: household?.contactPhone,
+    visits: cook.visits.map(({ label, time, slots }) => ({ label, time, slots })),
+    weeklyOff: cook.weeklyOff,
+    week: days.map(packDay),
+    at: today,
+  }
+}
+
+async function pipe(bytes: Uint8Array, stream: CompressionStream | DecompressionStream): Promise<Uint8Array> {
+  const out = new Response(new Blob([bytes as BlobPart]).stream().pipeThrough(stream as unknown as ReadableWritablePair<Uint8Array, Uint8Array>))
+  return new Uint8Array(await out.arrayBuffer())
+}
+const toB64 = (bytes: Uint8Array) => {
+  let bin = ''
+  bytes.forEach((b) => (bin += String.fromCharCode(b)))
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+const fromB64 = (s: string) => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0))
+
+/** 'z…' = deflate-compressed, 'j…' = plain (for browsers without CompressionStream). */
+export async function encodeHouse(snap: HouseSnapshot): Promise<string> {
+  const json = JSON.stringify(snap)
+  try {
+    if (typeof CompressionStream !== 'undefined') return 'z' + toB64(await pipe(new TextEncoder().encode(json), new CompressionStream('deflate-raw')))
+  } catch {
+    /* fall through to the plain form */
+  }
+  return 'j' + b64.enc(json)
+}
+
+export async function decodeHouse(data: string): Promise<HouseSnapshot | null> {
+  try {
+    const body = data.slice(1)
+    const json = data[0] === 'z' ? new TextDecoder().decode(await pipe(fromB64(body), new DecompressionStream('deflate-raw'))) : b64.dec(body)
+    const snap = JSON.parse(json) as HouseSnapshot
+    if (!snap || !Array.isArray(snap.week) || snap.week.length !== 7 || !snap.name) return null
+    return snap
+  } catch {
+    return null
+  }
+}
+
+export const houseLink = async (snap: HouseSnapshot) => publicLink(`/h/${await encodeHouse(snap)}`)
+
+/** A day at a house that was added by link: the stored weekday menu, with today's date and her own days off. */
+export function dayFromHouse(house: { week: unknown[]; name: string; reply?: string; visits: { label: string; time: string; slots: MealSlot[] }[] }, date: ISODate, lang: CookLanguage, off?: CookDay['off']): CookDay | null {
+  const day = unpackDay(house.week[weekdayOf(date)] as Packed)
+  if (!day) return null
+  // regroup the meals under the timings the cook has now (she may have changed them)
+  const slots = day.visits.flatMap((v) => v.slots)
+  const visits = [...house.visits].sort((a, b) => a.time.localeCompare(b.time)).map((v) => ({ label: v.label, time: v.time, slots: slots.filter((s) => v.slots.includes(s.slot)) }))
+  return { ...day, date, lang, household: house.name, reply: house.reply, off, visits: off ? [] : visits, soak: off ? [] : day.soak }
+}
+
+export function houseInviteMessage(cookName: string, houseName: string, link: string, lang: CookLanguage): string {
+  return lang === 'hi'
+    ? `नमस्ते ${cookName} जी! 🙏\nRasoi में “${houseName}” जोड़ने के लिए यह लिंक दबाएँ। रोज़ का खाना, कितना बनाना है और वीडियो सब वहीं दिखेगा:\n${link}`
+    : `Hi ${cookName}! 🙏\nTap this link to add “${houseName}” to your Rasoi. You'll see each day's menu, how much to make, and recipe videos:\n${link}`
+}
 
 /* ════════════════════════ Words for the cook ════════════════════════ */
 

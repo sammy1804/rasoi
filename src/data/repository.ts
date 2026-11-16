@@ -6,6 +6,8 @@ import { commit, emptyDB, getDB, replaceDB, setSessionUserId } from './store'
 import { weekdayOf } from '@/lib/dates'
 import type {
   Cook,
+  CookAccount,
+  CookHouse,
   CookLanguage,
   CookLeave,
   CookVisit,
@@ -525,10 +527,6 @@ export function cooksOf(db: DB, householdId: ID): Cook[] {
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
 }
 
-export function cookForUser(db: DB, userId: ID | null): Cook | undefined {
-  if (!userId) return undefined
-  return Object.values(db.cooks).find((c) => c.userId === userId)
-}
 
 export function normalisePhone(raw: string | undefined): string | undefined {
   const digits = (raw ?? '').replace(/\D/g, '')
@@ -579,32 +577,98 @@ export function removeCook(cookId: ID) {
   })
 }
 
-/** The cook signs in with the household code. Claims an existing cook profile, or creates one. */
-export function joinAsCook(code: string, input: CookInput, claimCookId?: ID): { error?: 'not-found' } {
-  const db = getDB()
-  const household = findHouseholdByCode(db, code)
-  if (!household) return { error: 'not-found' }
+/* ——— The cook's own account: one sign-in, several houses ——— */
+
+export const DEFAULT_VISITS: Omit<CookVisit, 'id'>[] = [
+  { label: 'Morning', time: '07:45', slots: ['breakfast', 'lunch'] },
+  { label: 'Evening', time: '18:30', slots: ['snack', 'dinner'] },
+]
+
+export function createCookAccount(input: { name: string; phone?: string; language: CookLanguage }): ID {
   let userId = ''
   commit((d) => {
     userId = uid('user')
-    d.users[userId] = { id: userId, name: input.name.trim(), createdAt: new Date().toISOString() }
-    const existing = claimCookId ? d.cooks[claimCookId] : undefined
-    if (existing && existing.householdId === household.id) {
-      existing.userId = userId
-      existing.name = input.name.trim() || existing.name
-      existing.phone = normalisePhone(input.phone) ?? existing.phone
-      existing.language = input.language
-      existing.visits = input.visits.map((v) => ({ ...v, id: uid('visit') }))
-      existing.weeklyOff = input.weeklyOff
-    } else {
-      insertCook(d, household.id, input, userId)
-    }
+    const now = new Date().toISOString()
+    d.users[userId] = { id: userId, name: input.name.trim(), createdAt: now }
+    d.cookAccounts[userId] = { userId, name: input.name.trim(), phone: normalisePhone(input.phone), language: input.language, createdAt: now }
   })
   setSessionUserId(userId)
+  return userId
+}
+
+export function updateCookAccount(userId: ID, patch: Partial<Pick<CookAccount, 'name' | 'phone' | 'language'>>) {
+  commit((d) => {
+    const a = d.cookAccounts[userId]
+    if (!a) return
+    Object.assign(a, patch)
+    if ('phone' in patch) a.phone = normalisePhone(patch.phone)
+    if (patch.name && d.users[userId]) d.users[userId].name = patch.name
+  })
+}
+
+/** Houses on this phone that this cook works at. */
+export function localCooksOf(db: DB, userId: ID): Cook[] {
+  return Object.values(db.cooks)
+    .filter((c) => c.userId === userId && db.households[c.householdId])
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+}
+
+/** Houses this cook added from a family's link. */
+export function importedHousesOf(db: DB, userId: ID): CookHouse[] {
+  return Object.values(db.cookHouses)
+    .filter((h) => h.userId === userId)
+    .sort((a, b) => a.importedAt.localeCompare(b.importedAt) || a.name.localeCompare(b.name))
+}
+
+/** Add a house with its family code. The household has to be on this phone (or be a demo code). */
+export function addHouseByCode(userId: ID, code: string): { error?: 'not-found' | 'already' } {
+  const db = getDB()
+  const household = findHouseholdByCode(db, code)
+  const account = db.cookAccounts[userId]
+  if (!household || !account) return { error: 'not-found' }
+  if (Object.values(db.cooks).some((c) => c.householdId === household.id && c.userId === userId)) return { error: 'already' }
+  commit((d) => {
+    // take over the profile the family set up for their cook, if there is one waiting
+    const waiting = Object.values(d.cooks).find((c) => c.householdId === household.id && !c.userId)
+    if (waiting) waiting.userId = userId
+    else insertCook(d, household.id, { name: account.name, phone: account.phone, language: account.language, visits: DEFAULT_VISITS, weeklyOff: [] }, userId)
+  })
   return {}
 }
 
-/** Use this device as the cook's (e.g. a shared kitchen phone). */
+/** Stop working at a house on this phone. The family's cook profile stays, just unlinked. */
+export function leaveLocalHouse(cookId: ID) {
+  commit((d) => {
+    if (d.cooks[cookId]) d.cooks[cookId].userId = undefined
+  })
+}
+
+/** Add (or refresh) a house from a family's link. */
+export function importHouse(userId: ID, house: Omit<CookHouse, 'id' | 'userId'>): ID {
+  let id = ''
+  commit((d) => {
+    const existing = Object.values(d.cookHouses).find((h) => h.userId === userId && ((house.code && h.code === house.code) || (!house.code && h.name === house.name)))
+    id = existing?.id ?? uid('house')
+    // keep timings the cook changed herself when the family re-sends the link
+    d.cookHouses[id] = { ...house, id, userId, visits: existing?.visits ?? house.visits.map((v) => ({ ...v, id: v.id ?? uid('visit') })), weeklyOff: existing?.weeklyOff ?? house.weeklyOff }
+  })
+  return id
+}
+
+export function updateCookHouse(id: ID, patch: Partial<Pick<CookHouse, 'visits' | 'weeklyOff'>>) {
+  commit((d) => {
+    if (d.cookHouses[id]) Object.assign(d.cookHouses[id], patch)
+  })
+}
+
+export function removeCookHouse(id: ID) {
+  commit((d) => {
+    delete d.cookHouses[id]
+    for (const [k, l] of Object.entries(d.cookLeaves)) if (l.cookId === id) delete d.cookLeaves[k]
+  })
+}
+
+/** Use this phone as this cook's (e.g. a shared kitchen phone): signs in to her account, creating it if needed. */
 export function signInAsCook(cookId: ID) {
   let userId = ''
   commit((d) => {
@@ -614,6 +678,7 @@ export function signInAsCook(cookId: ID) {
       c.userId = uid('user')
       d.users[c.userId] = { id: c.userId, name: c.name, createdAt: new Date().toISOString() }
     }
+    if (!d.cookAccounts[c.userId]) d.cookAccounts[c.userId] = { userId: c.userId, name: c.name, phone: c.phone, language: c.language, createdAt: new Date().toISOString() }
     userId = c.userId
   })
   if (userId) setSessionUserId(userId)
@@ -626,7 +691,7 @@ export function leavesOf(db: DB, cookId: ID): CookLeave[] {
 }
 
 /** Is the cook coming on this date? Weekly off days and marked leave both count. */
-export function cookIsOff(db: DB, cook: Cook, date: ISODate): { off: boolean; reason?: 'weekly' | 'leave'; leave?: CookLeave } {
+export function cookIsOff(db: DB, cook: Pick<Cook, 'id' | 'weeklyOff'>, date: ISODate): { off: boolean; reason?: 'weekly' | 'leave'; leave?: CookLeave } {
   const leave = Object.values(db.cookLeaves).find((l) => l.cookId === cook.id && l.date === date)
   if (leave) return { off: true, reason: 'leave', leave }
   if (cook.weeklyOff.includes(weekdayOf(date))) return { off: true, reason: 'weekly' }

@@ -316,11 +316,12 @@ export function LeaveSheet({ open, onClose, db, cook, byUserId, lang = 'en' }: {
   )
 }
 
-export function LeaveList({ db, cook, lang = 'en', canEdit = true }: { db: DB; cook: Cook; lang?: CookLanguage; canEdit?: boolean }) {
+export function LeaveList({ db, cook, lang = 'en', canEdit = true, compact }: { db: DB; cook: Pick<Cook, 'id' | 'weeklyOff'>; lang?: CookLanguage; canEdit?: boolean; compact?: boolean }) {
   const hi = lang === 'hi'
   const today = todayISO()
   const upcoming = leavesOf(db, cook.id).filter((l) => l.date >= today)
   const weekly = cook.weeklyOff.map((d) => WEEKDAY_SHORT[d]).join(', ')
+  if (compact && upcoming.length === 0) return null
   return (
     <div data-testid="leave-list">
       {weekly && (

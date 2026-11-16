@@ -1,7 +1,7 @@
 import { addDays, todayISO, weekdayOf } from '@/lib/dates'
 import { personalItems } from '@/lib/nutrition'
 import { _internals, allFoods, choiceKey, mealFor, waterKey } from './repository'
-import { emptyDB, replaceDB, setSessionUserId } from './store'
+import { commit, emptyDB, replaceDB, setSessionUserId } from './store'
 import type { DB, Profile } from './types'
 import { MEAL_SLOTS } from './types'
 
@@ -55,10 +55,19 @@ function mulberry32(seed: number) {
 
 const ALL_TIPS = { intro: true, plannedVsEaten: true, firstTick: true, sharing: true, swipe: true }
 
-export function buildDemo() {
-  const db: DB = emptyDB()
-  const { buildLog, newMember, uniqueCode, seedPlan, insertCook } = _internals
+/**
+ * Demo family codes. Real codes never contain O, I or 1, so these can't clash.
+ * They work on any phone: entering one adds the demo house to that phone.
+ */
+export const DEMO_CODE = 'RASOI1'
+export const DEMO_CODE_2 = 'RASOI2'
+export const isDemoCode = (code: string) => [DEMO_CODE, DEMO_CODE_2].includes(code.trim().toUpperCase())
+
+/** Samridhi & Naina's house, with two weeks of history. Adds into `db`; does nothing if it's already there. */
+function populateDemo(db: DB): { householdId: string; userId: string } {
+  const { buildLog, newMember, seedPlan, insertCook } = _internals
   const householdId = 'hh_demo'
+  if (db.households[householdId]) return { householdId, userId: db.households[householdId].createdBy }
   const s = newMember(db, householdId, { name: 'Samridhi', profile: SAMRIDHI_PROFILE() }, 'owner', 0)
   const n = newMember(db, householdId, { name: 'Naina', profile: NAINA_PROFILE() }, 'member', 1)
   // Naina joined a little after Samridhi
@@ -68,7 +77,7 @@ export function buildDemo() {
   db.households[householdId] = {
     id: householdId,
     name: 'Home',
-    code: uniqueCode(db),
+    code: DEMO_CODE,
     createdBy: s.userId,
     createdAt: new Date().toISOString(),
     mealTimes: { breakfast: '08:30', lunch: '13:30', snack: '17:00', dinner: '20:30' },
@@ -189,7 +198,41 @@ export function buildDemo() {
     db.weightLogs[id] = { id, userId: n.userId, date: addDays(today, -7 * (nw.length - 1 - i) - 2), kg }
   })
 
+  return { householdId, userId: s.userId }
+}
+
+/** A second, smaller demo house so a cook can try working at two places. */
+function populateDemo2(db: DB) {
+  const { newMember, seedPlan, insertCook } = _internals
+  const householdId = 'hh_demo2'
+  if (db.households[householdId]) return
+  const k = newMember(db, householdId, { name: 'Kavita', profile: { ...SAMRIDHI_PROFILE(), goal: 'maintain', portionStyle: 'standard', diet: 'veg', dislikes: [], calorieTarget: 1900, proteinMin: 60, proteinTarget: 75 } }, 'owner', 0)
+  const a = newMember(db, householdId, { name: 'Arjun', profile: { ...NAINA_PROFILE(), sex: 'male', heightCm: 176, weightKg: 68, calorieTarget: 2500, proteinMin: 90, proteinTarget: 110, breakfastRamp: { enabled: false, startPct: 70, weeklyStepPct: 10, startedOn: todayISO() } } }, 'member', 1)
+  db.members[k.memberId].tips = { ...ALL_TIPS }
+  db.members[a.memberId].tips = { ...ALL_TIPS }
+  db.households[householdId] = {
+    id: householdId,
+    name: 'Mehta house',
+    code: DEMO_CODE_2,
+    createdBy: k.userId,
+    createdAt: new Date().toISOString(),
+    mealTimes: { breakfast: '09:00', lunch: '14:00', snack: '17:30', dinner: '21:00' },
+  }
+  seedPlan(db, householdId)
+  insertCook(db, householdId, { name: 'Cook', language: 'hi', visits: [{ label: 'Afternoon', time: '11:00', slots: ['lunch', 'dinner'] }], weeklyOff: [6] })
+}
+
+/** Replace everything on this phone with the demo family, signed in as Samridhi. */
+export function buildDemo() {
+  const db: DB = emptyDB()
+  const { householdId, userId } = populateDemo(db)
   replaceDB(db)
-  setSessionUserId(s.userId)
+  setSessionUserId(userId)
   return db.households[householdId]
+}
+
+/** Make a demo house exist on this phone without touching anything else (for the cook's "try a demo house"). */
+export function ensureDemoHouse(code: string) {
+  const c = code.trim().toUpperCase()
+  commit((d) => (c === DEMO_CODE_2 ? populateDemo2(d) : populateDemo(d)))
 }

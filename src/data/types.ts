@@ -100,8 +100,39 @@ export interface Cook {
   createdAt: string
 }
 
+/** The cook's own sign-in. One account can work at several houses. */
+export interface CookAccount {
+  userId: ID
+  name: string
+  phone?: string
+  language: CookLanguage
+  createdAt: string
+}
+
+/**
+ * A house the cook added from a family's link. It holds a snapshot of that
+ * family's weekly menu, so it works on the cook's own phone with no shared database.
+ */
+export interface CookHouse {
+  id: ID
+  userId: ID
+  name: string
+  code?: string
+  /** what the family calls the cook */
+  cookName: string
+  people: string[]
+  /** family WhatsApp number for replies */
+  reply?: string
+  visits: CookVisit[]
+  weeklyOff: Weekday[]
+  /** packed menu for Monday…Sunday (see lib/kitchen.ts) */
+  week: unknown[]
+  importedAt: ISODate
+}
+
 export interface CookLeave {
   id: ID
+  /** a Cook id (house on this phone) or a CookHouse id (house added by link) */
   cookId: ID
   date: ISODate
   note?: string
@@ -360,4 +391,6 @@ export interface DB {
   cookLeaves: Record<ID, CookLeave>
   groceryChecks: Record<string, GroceryCheck>
   spendLogs: Record<ID, SpendLog>
+  cookAccounts: Record<ID, CookAccount>
+  cookHouses: Record<ID, CookHouse>
 }

@@ -179,19 +179,48 @@ function expect(cond, msg) {
       expect((await page.getByTestId('leave-list').innerText()).includes('Tomorrow'), 'leave not listed')
     })
 
-    await step('Cook joins with the code and sees her menu', async () => {
+    await step('Cook signs up on her own, adds two houses, sees her route', async () => {
       await page.getByRole('link', { name: 'Profile' }).click()
       await page.getByRole('button', { name: /Sign out/ }).click()
       await page.getByRole('button', { name: /मैं कुक हूँ/ }).click()
+      await page.getByPlaceholder('जैसे: Sunita').fill('Radha')
+      await page.getByRole('button', { name: /शुरू करें/ }).click()
+      await page.getByTestId('cook-empty').waitFor({ timeout: 5000 })
+      // a wrong code explains what to do instead of dead-ending
+      await page.getByRole('button', { name: /^घर जोड़ें$/ }).click()
+      await page.getByRole('textbox').fill('ZZZZZZ')
+      await page.getByRole('button', { name: /^जोड़ें$/ }).click()
+      expect((await page.getByRole('alert').innerText()).includes('RASOI1'), 'no help shown for an unknown code')
+      // the family's real code (same phone) takes over the profile the family set up
       await page.getByRole('textbox').fill(code)
-      await page.getByRole('button', { name: /मैं Sunita हूँ/ }).click()
+      await page.getByRole('button', { name: /^जोड़ें$/ }).click()
+      await page.getByTestId('cook-house').first().waitFor({ timeout: 5000 })
+      await page.getByRole('radio', { name: /कल/ }).click()
+      expect((await page.getByTestId('cook-off').count()) === 1, 'tomorrow should show as a day off at the first house')
+      await page.getByRole('radio', { name: /आज/ }).click()
+      // the demo family code works on any phone
+      await page.getByRole('button', { name: /घर जोड़ें/ }).first().click()
+      await page.getByRole('textbox').fill('RASOI2')
+      await page.getByRole('button', { name: /^जोड़ें$/ }).click()
+      await page.waitForTimeout(500)
+      expect((await page.getByTestId('my-houses').locator(':scope > li').count()) === 2, 'expected two houses in the cook app')
+      expect((await page.getByTestId('cook-house').count()) === 2, 'both houses should show for the day')
+      const cooksAtHome = await page.evaluate((c) => {
+        const d = JSON.parse(localStorage['rasoi:db:v1'])
+        const hh = Object.values(d.households).find((h) => h.code === c)
+        return Object.values(d.cooks).filter((x) => x.householdId === hh.id).length
+      }, code)
+      expect(cooksAtHome === 1, `joining should reuse the family's cook profile, found ${cooksAtHome}`)
+      // a day off for one house only, with a WhatsApp message ready for that family
+      await page.getByRole('button', { name: /मैं नहीं आऊँगी/ }).click()
+      await page.getByRole('button', { name: /^आज/ }).click()
+      await page.getByRole('button', { name: 'Mehta house' }).last().click()
+      await page.getByRole('button', { name: /सेव करें/ }).click()
+      const tell = await page.getByTestId('leave-notify').getByRole('link').count()
+      expect(tell === 1, `expected one family to notify, got ${tell}`)
+      await page.getByRole('button', { name: /हो गया/ }).click()
       await page.waitForTimeout(400)
-      expect((await page.getByTestId('cook-app').count()) === 1, 'cook interface not shown')
-      const cooks = await page.evaluate(() => Object.keys(JSON.parse(localStorage['rasoi:db:v1']).cooks).length)
-      expect(cooks === 1, `expected the cook to claim her profile, found ${cooks} cooks`)
-      await page.getByRole('radio', { name: /कल|Tomorrow/ }).click()
-      expect((await page.getByTestId('cook-off').count()) === 1, 'tomorrow should show as a day off')
-      await page.getByRole('button', { name: /Sign out|बाहर निकलें/ }).click()
+      await page.getByRole('button', { name: /बाहर निकलें/ }).click()
       await page.getByRole('button', { name: /Naina/ }).click()
       await page.waitForTimeout(300)
     })
@@ -244,14 +273,14 @@ function expect(cond, msg) {
           await p.getByRole('radio', { name: sec }).click()
           await check(sec)
         }
-        await p.getByRole('button', { name: /Open Sunita’s view/ }).click()
-        await check('cook view')
+        await p.getByRole('button', { name: /Open her app here/ }).click()
+        await check('cook app')
         await c.close()
       }
     })
 
     // The public site (hash-routed build): the cook's link opens with no login.
-    await step('Cook link from the WhatsApp message opens on the public site', async () => {
+    await step('Public site: daily cook link, house link sign-up and demo houses', async () => {
       const web = await startServer('dist', 4176)
       try {
         const c = await browser.newContext({ ...devices['iPhone 13'] })
@@ -276,8 +305,34 @@ function expect(cond, msg) {
         expect((await cp.getByRole('button', { name: /सुनें|Listen/ }).count()) > 0, 'no listen buttons')
         const reply = await cp.getByRole('link', { name: /बन गया|Done/ }).getAttribute('href')
         expect(reply.startsWith('https://wa.me/'), 'done button does not open WhatsApp')
+        // the house link: on a phone that has never seen Rasoi, it is the cook's whole sign-up
+        const share = await p.getByTestId('cook-own-app').getByRole('link', { name: /Share to group|Share on WhatsApp/ }).getAttribute('href')
+        const hl = decodeURIComponent(share.split('?text=')[1]).match(/https?:\/\/\S+#\/h\/\S+/)
+        expect(hl, 'no house link in the invite message')
+        const phone = await browser.newContext({ ...devices['iPhone 13'] })
+        const hp = await phone.newPage()
+        watch(hp)
+        await hp.goto(hl[0].replace(/^https?:\/\/[^/]+\/(rasoi\/)?/, 'http://localhost:4176/'))
+        await hp.getByTestId('house-link').waitFor({ timeout: 8000 })
+        await hp.getByRole('button', { name: /शुरू करें|Start/ }).click()
+        await hp.getByTestId('cook-house').waitFor({ timeout: 8000 })
+        expect((await hp.getByTestId('cook-menu').count()) + (await hp.getByTestId('cook-off').count()) === 1, 'menu missing after adding the house by link')
+        expect((await hp.getByTestId('my-houses').innerText()).includes('Home'), 'house not listed in the cook app')
+        // and the demo houses for someone just trying it out
+        const trial = await browser.newContext({ ...devices['iPhone 13'] })
+        const tp = await trial.newPage()
+        watch(tp)
+        await tp.goto('http://localhost:4176/')
+        await tp.getByRole('button', { name: /मैं कुक हूँ/ }).click()
+        await tp.getByPlaceholder('जैसे: Sunita').fill('Radha')
+        await tp.getByRole('button', { name: /शुरू करें/ }).click()
+        await tp.getByTestId('try-demo-houses').click()
+        await tp.getByTestId('cook-route').waitFor({ timeout: 8000 })
+        expect((await tp.getByTestId('cook-route').locator('li').count()) >= 2, 'route should list visits at both demo houses')
         await c.close()
         await fresh.close()
+        await phone.close()
+        await trial.close()
       } finally {
         stop(web)
       }
