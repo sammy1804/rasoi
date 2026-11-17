@@ -31,9 +31,11 @@ export function DailyBars({
   target,
   marker,
   band,
+  targets,
   unit,
   barClass = 'bg-chart-1',
   testId,
+  footer,
 }: {
   title: string
   days: { value: number; logged: boolean }[]
@@ -42,24 +44,31 @@ export function DailyBars({
   marker?: number
   /** shaded "in range" band, e.g. [0.9, 1.1] × target */
   band?: [number, number]
+  /** a different target for each day (drawn as a tick over each bar); replaces the band and dashed line */
+  targets?: number[]
   unit: string
   barClass?: string
   testId?: string
+  footer?: ReactNode
 }) {
   const [sel, setSel] = useState<number | null>(null)
   const H = 120
-  const max = Math.max(target * 1.2, ...days.map((d) => d.value))
+  const max = Math.max(target * 1.2, ...(targets ?? []).map((t) => t * 1.12), ...days.map((d) => d.value))
   const y = (v: number) => H - (v / max) * H
   const ref = marker ?? target
   return (
     <ChartCard
       title={title}
       testId={testId}
+      footer={footer}
       readout={
         sel !== null && days[sel].logged ? (
           <>
             <b className="text-ink">{WEEKDAY_SHORT[sel]}</b> · {fmtNum(days[sel].value)} {unit}
+            {targets ? ` of ${fmtNum(targets[sel])}` : ''}
           </>
+        ) : targets ? (
+          'line over each bar = that day’s target'
         ) : band ? (
           `band = target ±10%`
         ) : (
@@ -68,13 +77,13 @@ export function DailyBars({
       }
     >
       <div className="relative mt-3" style={{ height: H + 22 }}>
-        {band && <div className="absolute inset-x-0 bg-meal-lunch/25" style={{ top: y(target * band[1]), height: y(target * band[0]) - y(target * band[1]) }} />}
-        <div className="absolute inset-x-0 border-t border-dashed border-ink-mute/60" style={{ top: y(ref) }} />
+        {band && !targets && <div className="absolute inset-x-0 bg-meal-lunch/25" style={{ top: y(target * band[1]), height: y(target * band[0]) - y(target * band[1]) }} />}
+        {!targets && <div className="absolute inset-x-0 border-t border-dashed border-ink-mute/60" style={{ top: y(ref) }} />}
         <div className="absolute inset-x-0 border-t border-line" style={{ top: H }} />
         <div className="absolute inset-0 grid grid-cols-7 gap-2">
           {days.map((d, i) => {
             const h = d.logged ? Math.max(3, (d.value / max) * H) : 0
-            const hit = band ? d.value >= target * band[0] && d.value <= target * band[1] : d.value >= ref
+            const hit = targets ? d.value >= targets[i] * 0.9 && d.value <= targets[i] * 1.1 : band ? d.value >= target * band[0] && d.value <= target * band[1] : d.value >= ref
             return (
               <button
                 key={i}
@@ -92,6 +101,7 @@ export function DailyBars({
                     animate={{ height: h }}
                     transition={{ delay: i * 0.03, type: 'spring', stiffness: 160, damping: 22 }}
                   />
+                  {targets && d.logged && <span className="absolute left-[8%] right-[8%] h-[2px] rounded-full bg-ink" style={{ top: y(targets[i]) - 1 }} />}
                 </span>
                 <span className={cn('mt-1.5 text-[11px] font-semibold', sel === i ? 'text-ink' : 'text-ink-mute')}>{WEEKDAY_SHORT[i].charAt(0)}</span>
               </button>

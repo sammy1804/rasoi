@@ -1,4 +1,5 @@
-import { allFoods, choiceKey, logsFor, mealFor, waterKey } from '@/data/repository'
+import { activityFor, allFoods, choiceKey, logsFor, mealFor, waterKey } from '@/data/repository'
+import { dayTarget, type DayTarget } from './fitness'
 import type { DB, Food, FoodLog, HouseholdMember, ISODate, MealSlot, Nutrients, Profile } from '@/data/types'
 import { MEAL_SLOTS } from '@/data/types'
 import { todayISO, weekdayOf } from './dates'
@@ -27,6 +28,8 @@ export interface DayView {
   mealsDone: number
   water: number
   logs: FoodLog[]
+  /** today's calorie target, following the day's movement */
+  target: DayTarget
 }
 
 export function dayView(db: DB, member: HouseholdMember, date: ISODate): DayView {
@@ -71,6 +74,7 @@ export function dayView(db: DB, member: HouseholdMember, date: ISODate): DayView
     mealsDone: slots.filter((s) => s.done).length,
     water: db.waterLogs[waterKey(member.userId, date)]?.glasses ?? 0,
     logs,
+    target: dayTarget(member.profile, activityFor(db, member.userId, date), date === todayISO()),
   }
 }
 
@@ -101,14 +105,15 @@ export function dayInsights(view: DayView, profile: Profile): Insight[] {
     out.push({ tone: 'nudge', text: `You’re still short on protein — consider ${proteinIdeas(profile)}.` })
   else if (protein >= profile.proteinMin * 0.45) out.push({ tone: 'good', text: 'Protein is on track so far.' })
 
-  const lo = profile.calorieTarget * 0.9
-  const hi = profile.calorieTarget * 1.1
+  const goal = view.target.target
+  const lo = goal * 0.9
+  const hi = goal * 1.1
   if (kcal >= lo && kcal <= hi) out.push({ tone: 'good', text: 'Calories are within your target range.' })
   else if (kcal > hi)
     out.push({ tone: 'neutral', text: 'A little above your usual range today — that’s fine, it evens out over the week.' })
   else if (dayMostlyOver && profile.goal === 'gain')
     out.push({ tone: 'nudge', text: 'Easy top-ups: a glass of milk, a banana with peanut butter, or a handful of nuts.' })
-  else if (!dayMostlyOver) out.push({ tone: 'neutral', text: `About ${Math.max(0, Math.round((profile.calorieTarget - kcal) / 10) * 10).toLocaleString('en-IN')} kcal of room left today.` })
+  else if (!dayMostlyOver) out.push({ tone: 'neutral', text: `About ${Math.max(0, Math.round((goal - kcal) / 10) * 10).toLocaleString('en-IN')} kcal of room left today.` })
   if (view.fv >= 5) out.push({ tone: 'good', text: 'Five or more fruit & veg servings — lovely variety.' })
   return out.slice(0, 2)
 }
@@ -131,7 +136,14 @@ export interface WeekReview {
   calorieDays: number
   avgCarbs: number
   avgFat: number
-  daily: { date: ISODate; kcal: number; protein: number; logged: boolean }[]
+  daily: { date: ISODate; kcal: number; protein: number; logged: boolean; target: number; steps: number; active: number; workoutMinutes: number }[]
+  /** movement, averaged over days that have any logged */
+  movementDays: number
+  avgSteps: number
+  avgActive: number
+  workouts: number
+  workoutMinutes: number
+  stepGoalDays: number
   /** per day, per meal slot: 2 = done, 1 = partly, 0 = nothing logged, null = still ahead */
   slotGrid: (0 | 1 | 2 | null)[][]
 }
@@ -149,6 +161,12 @@ export function weekReview(db: DB, member: HouseholdMember, dates: ISODate[]): W
   let calorieDays = 0
   let sumC = 0
   let sumF = 0
+  let movementDays = 0
+  let sumSteps = 0
+  let sumActive = 0
+  let workouts = 0
+  let workoutMinutes = 0
+  let stepGoalDays = 0
   const slotGrid: WeekReview['slotGrid'] = []
   const skipped: Record<MealSlot, number> = { breakfast: 0, lunch: 0, snack: 0, dinner: 0 }
   const counts = new Map<string, number>()
@@ -156,14 +174,24 @@ export function weekReview(db: DB, member: HouseholdMember, dates: ISODate[]): W
   const daily: WeekReview['daily'] = []
   for (const date of dates) {
     if (date > today) {
-      daily.push({ date, kcal: 0, protein: 0, logged: false })
+      daily.push({ date, kcal: 0, protein: 0, logged: false, target: p.calorieTarget, steps: 0, active: 0, workoutMinutes: 0 })
       slotGrid.push([null, null, null, null])
       continue
     }
     const v = dayView(db, member, date)
+    const act = v.target.active
+    const moved = act.steps > 0 || act.workoutMinutes > 0
+    if (moved) {
+      movementDays++
+      sumSteps += act.steps
+      sumActive += act.total
+      workouts += activityFor(db, member.userId, date)?.workouts.length ?? 0
+      workoutMinutes += act.workoutMinutes
+      if (act.steps >= (p.stepGoal ?? 8000)) stepGoalDays++
+    }
     slotGrid.push(v.slots.map((sl) => (sl.done ? 2 : sl.eatenCount > 0 ? 1 : 0)))
     const has = v.logs.some((l) => l.status !== 'skipped')
-    daily.push({ date, kcal: v.totals.kcal, protein: v.totals.protein, logged: has })
+    daily.push({ date, kcal: v.totals.kcal, protein: v.totals.protein, logged: has, target: v.target.target, steps: act.steps, active: act.total, workoutMinutes: act.workoutMinutes })
     mealsPossible += 4
     mealsCompleted += v.mealsDone
     for (const s of v.slots) {
@@ -176,7 +204,7 @@ export function weekReview(db: DB, member: HouseholdMember, dates: ISODate[]): W
     sumC += v.totals.carbs
     sumF += v.totals.fat
     if (v.totals.protein >= p.proteinMin) proteinDays++
-    if (v.totals.kcal >= p.calorieTarget * 0.9 && v.totals.kcal <= p.calorieTarget * 1.1) calorieDays++
+    if (v.totals.kcal >= v.target.target * 0.9 && v.totals.kcal <= v.target.target * 1.1) calorieDays++
     for (const l of v.logs) {
       if (l.status === 'skipped') continue
       counts.set(l.foodId, (counts.get(l.foodId) ?? 0) + 1)
@@ -207,5 +235,11 @@ export function weekReview(db: DB, member: HouseholdMember, dates: ISODate[]): W
     avgFat: logged ? sumF / logged : 0,
     daily,
     slotGrid,
+    movementDays,
+    avgSteps: movementDays ? sumSteps / movementDays : 0,
+    avgActive: movementDays ? sumActive / movementDays : 0,
+    workouts,
+    workoutMinutes,
+    stepGoalDays,
   }
 }

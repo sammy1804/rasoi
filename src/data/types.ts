@@ -184,6 +184,10 @@ export interface Profile {
   breakfastRamp: BreakfastRamp
   trackWater: boolean
   waterTargetGlasses: number
+  /** daily step goal (default 8,000) */
+  stepGoal?: number
+  /** let the day's calorie target follow how active the day was (default on) */
+  adjustForActivity?: boolean
 }
 
 export interface HouseholdMember {
@@ -362,6 +366,24 @@ export interface WeightLog {
   kg: number
 }
 
+export type Effort = 'easy' | 'moderate' | 'hard'
+
+export interface Workout {
+  id: ID
+  /** an id from the workout list in lib/fitness.ts */
+  type: string
+  minutes: number
+  effort: Effort
+}
+
+/** One person's movement on one day. */
+export interface ActivityLog {
+  userId: ID
+  date: ISODate
+  steps: number
+  workouts: Workout[]
+}
+
 export interface WaterLog {
   userId: ID
   date: ISODate
@@ -395,4 +417,5 @@ export interface DB {
   spendLogs: Record<ID, SpendLog>
   cookAccounts: Record<ID, CookAccount>
   cookHouses: Record<ID, CookHouse>
+  activityLogs: Record<string, ActivityLog>
 }

@@ -78,7 +78,7 @@ export function ProfileScreen() {
         <Row label="Rather not eat" value={p.dislikes.length ? p.dislikes.map((d) => d.charAt(0).toUpperCase() + d.slice(1)).join(', ') : 'Nothing listed'} />
       </Section>
 
-      <Section title="Breakfast & water">
+      <Section title="Breakfast, movement & water">
         <ToggleRow
           label="Build up breakfast gradually"
           sub={p.breakfastRamp.enabled ? `Starting at ${p.breakfastRamp.startPct}%, +${p.breakfastRamp.weeklyStepPct}% a week` : 'For small morning appetites'}
@@ -91,6 +91,16 @@ export function ProfileScreen() {
             <Stepper value={p.breakfastRamp.weeklyStepPct} step={5} min={5} max={30} format={(v) => `+${v}%/wk`} label="weekly increase" onChange={(v) => patch({ breakfastRamp: { ...p.breakfastRamp, weeklyStepPct: v } })} />
           </div>
         )}
+        <ToggleRow
+          label="Calories follow my activity"
+          sub={p.adjustForActivity === false ? `Always ${p.calorieTarget.toLocaleString('en-IN')} kcal` : 'More on active days, a little less on quiet ones (±250 kcal at most)'}
+          checked={p.adjustForActivity !== false}
+          onChange={(v) => patch({ adjustForActivity: v })}
+        />
+        <div className="border-t border-line/60 px-4 py-3">
+          <p className="mb-2 text-[15px] font-semibold">Daily step goal</p>
+          <Stepper value={p.stepGoal ?? 8000} step={500} min={2000} max={30000} format={(v) => `${v.toLocaleString('en-IN')} steps`} label="step goal" onChange={(v) => patch({ stepGoal: v })} />
+        </div>
         <ToggleRow label="Track water" sub="Optional glasses counter on Home" checked={p.trackWater} onChange={(v) => patch({ trackWater: v })} />
         {p.trackWater && (
           <div className="px-4 pb-3">

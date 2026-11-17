@@ -98,7 +98,11 @@ function expect(cond, msg) {
 
     await step('Partial portion (50%) lowers calories', async () => {
       const before = await kcal()
-      await page.getByRole('button', { name: 'Edit Besan chilla' }).click()
+      // whatever today's first breakfast item is (the plan differs by weekday); it was ticked in the step above.
+      // Centre it first: at the very bottom of the screen the floating "Add food" button sits over the row.
+      const edit = page.getByTestId('slot-breakfast').getByRole('button', { name: /^Edit / }).first()
+      await edit.evaluate((el) => el.scrollIntoView({ block: 'center' }))
+      await edit.click()
       await page.getByRole('button', { name: /Partly/ }).click()
       await page.getByRole('button', { name: '50%' }).click()
       await page.getByRole('button', { name: 'Save' }).click()
@@ -142,6 +146,24 @@ function expect(cond, msg) {
       await page.getByRole('button', { name: /^Add · / }).click()
       await page.waitForTimeout(400)
       expect((await kcal()) > before, 'adding from the list did not add calories')
+    })
+
+    await step('Steps and a workout move today’s calorie target', async () => {
+      expect((await page.getByTestId('metric-kcal').innerText()).includes('1,650'), 'target should start at 1,650')
+      await page.getByTestId('movement-card').click()
+      await page.getByRole('spinbutton', { name: 'Steps' }).fill('3000')
+      await page.waitForTimeout(300)
+      const quiet = await page.getByTestId('activity-effect').innerText()
+      expect(quiet.includes('1,650') && !quiet.includes('1,400'), 'today should not be lowered while the day is still going')
+      await page.getByRole('textbox', { name: 'Say your movement' }).fill('15000 steps and 60 min run')
+      await page.getByRole('button', { name: 'Add', exact: true }).click()
+      await page.waitForTimeout(300)
+      expect((await page.getByTestId('workout-list').innerText()).includes('Run'), 'the spoken workout was not added')
+      await page.getByRole('button', { name: 'Done' }).click()
+      await page.waitForTimeout(500)
+      expect((await page.getByTestId('metric-kcal').innerText()).includes('1,900'), `an active day should raise the target to 1,900: ${await page.getByTestId('metric-kcal').innerText()}`)
+      expect((await page.getByTestId('target-note').innerText()).includes('+250'), 'the reason for the change is not shown')
+      expect((await page.getByTestId('movement-card').innerText()).includes('15,000'), 'steps not shown on Home')
     })
 
     await step('Naina joins by code on the same phone', async () => {
@@ -271,7 +293,7 @@ function expect(cond, msg) {
       expect((await page.getByTestId('daily-summary').count()) === 1, 'daily summary missing')
       await page.getByRole('link', { name: 'Progress' }).click()
       await page.waitForTimeout(400)
-      for (const id of ['chart-kcal', 'chart-protein', 'chart-meals', 'chart-macros', 'chart-together', 'chart-trend']) {
+      for (const id of ['chart-kcal', 'chart-steps', 'chart-active', 'chart-protein', 'chart-meals', 'chart-macros', 'chart-together', 'chart-trend']) {
         expect((await page.getByTestId(id).count()) === 1, `${id} missing on Progress`)
       }
       await page.getByRole('link', { name: 'Home' }).click()

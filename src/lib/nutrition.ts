@@ -56,14 +56,22 @@ export function fvServingsFor(food: Food, amount: number, unit?: string, fractio
 const ACTIVITY_FACTOR: Record<Activity, number> = { light: 1.375, moderate: 1.55, active: 1.7 }
 const GOAL_DELTA: Record<Goal, number> = { lose: -300, maintain: 0, gain: 300 }
 
+/** Resting energy use per day (Mifflin-St Jeor). An estimate. */
+export function bmrOf(p: Pick<Profile, 'age' | 'sex' | 'heightCm' | 'weightKg'>): number {
+  return 10 * p.weightKg + 6.25 * p.heightCm - 5 * (p.age ?? 28) + (p.sex === 'male' ? 5 : -161)
+}
+
+/** The share of daily energy that an activity level assumes comes from moving about, above a resting day (×1.2). */
+export function activityShare(activity: Activity): number {
+  return ACTIVITY_FACTOR[activity] - 1.2
+}
+
 /**
  * Rough starting estimate (Mifflin-St Jeor × activity ± a gentle 300 kcal).
  * Only a starting point — never medical advice.
  */
 export function suggestTargets(p: Pick<Profile, 'age' | 'sex' | 'heightCm' | 'weightKg' | 'goal' | 'activity'>) {
-  const age = p.age ?? 28
-  const bmr = 10 * p.weightKg + 6.25 * p.heightCm - 5 * age + (p.sex === 'male' ? 5 : -161)
-  const tdee = bmr * ACTIVITY_FACTOR[p.activity]
+  const tdee = bmrOf(p) * ACTIVITY_FACTOR[p.activity]
   const kcal = round(clamp(tdee + GOAL_DELTA[p.goal], 1200, 3500), 50)
   // ~1.3–1.6 g/kg for losing (keep muscle), 1.6–2.0 g/kg for gaining, capped sensibly
   const perKg = p.goal === 'lose' ? [1.35, 1.6] : p.goal === 'gain' ? [1.6, 2.0] : [1.2, 1.5]

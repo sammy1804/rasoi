@@ -23,6 +23,7 @@ Shared 7-day meal planner + food tracker for two people (Samridhi and Naina). Re
 | `npm run dev` | Dev server on :5173 (public-site build, hash routes like `/#/join/CODE`) |
 | `npm run smoke` | Matcher checks, build both targets, full end-to-end suite (~4 min) |
 | `npm run check:understand` | Test the on-phone meal matcher on real sentences |
+| `npm run check:fitness` | Test the movement → calories maths |
 | `npm run build:mobile` | Only build `dist-mobile/index.html` |
 | `npm run build` | Public site in `dist/` (GitHub Pages; installable as a home-screen app) |
 | `npm run typecheck` | TypeScript only |
@@ -51,6 +52,14 @@ Shared 7-day meal planner + food tracker for two people (Samridhi and Naina). Re
 - **Voice** (`useVoice`): Claude's `dictation` capability where offered (desktop Chromium), else the browser's speech recognition (Chrome on Android, Safari on iPhone), else a hint to use the keyboard's mic key.
 - **Plan matching**: a recognised food that is on today's plan for that meal ticks the planned item with the amount actually eaten; "I had this instead of the plan" marks the rest of that meal skipped.
 - **Publishing**: the Claude phone page must be published with `capabilities: { sample: { images: true }, dictation: {} }` (omitting `capabilities` on later publishes keeps them). Load the `artifact-capabilities` skill before changing this.
+
+## Movement: steps, workouts and calories
+
+- **Logging** (`src/components/ActivitySheet.tsx`, opened from the movement card on Home): steps for the day and any workouts (type, minutes, effort), typed or said ("8,000 steps and 45 min yoga" → `parseActivity`). Stored as `ActivityLog` per person per day. A web page can't read the phone's step counter or Health/Google Fit, so steps are entered by hand.
+- **Calories burned** (`src/lib/fitness.ts`): steps → distance from height (step ≈ 0.413 × height) → ≈ 0.5 kcal per kg per km; workouts → (MET − 1) × weight × hours, MET by type and effort in `WORKOUTS`. Both are extra calories above resting, and both are estimates.
+- **The day's calorie target follows activity** (`dayTarget`): the profile's target is the anchor and already assumes a usual amount of movement for the person's activity level (`usualActiveKcal` = BMR × (activity factor − 1.2)). The day's target = base + (active − usual), capped at ±250 kcal, never below 1,200. Guard rails: a day with no movement logged is left alone; **today is never lowered** while it's still going (it only climbs as you move); someone gaining weight never drops below their base. `Profile.adjustForActivity = false` switches it off. `DayView.target` carries the result — use `view.target.target` wherever a day's calorie target is shown, never `profile.calorieTarget` directly.
+- **Graphs** (Progress): calories per day with a line over each bar for that day's own target, steps per day against the step goal, calories burned by moving against the usual, tiles for average steps and workouts, and steps in the 4-week trend. Movement is shown to the other person under the "calories" sharing setting.
+- `npm run check:fitness` tests the maths and the sentence parser; keep it passing when changing either.
 
 ## Kitchen: cook, groceries, WhatsApp, Zepto
 
@@ -81,6 +90,7 @@ Shared 7-day meal planner + food tracker for two people (Samridhi and Naina). Re
 - Don't use `AnimatePresence mode="wait"` for step/page transitions — it got stuck unmounting. Use enter-only keyed `motion.div`.
 - The Home swipe area swallows the click that ends a drag (`onClickCapture`); keep that when editing it.
 - Data lives in each phone's browser only. The cook's link works around this by carrying the menu itself, but ticks, leave and budget don't sync between phones until a sync layer exists. Options: the artifact `db` capability (everyone needs a claude.ai account and access to the link) or Supabase on a normal web host (the phone page can't call outside hosts).
+- Smoke tests must not assume a weekday: the plan differs by day, so pick "today's first breakfast item" rather than a named dish.
 - `scripts/smoke.cjs` must kill the preview server's whole process group (`detached` + `process.kill(-pid)`), or the port stays busy.
 - `npx tsx --tsconfig tsconfig.json scripts/kitchen-preview.ts [YYYY-MM-DD]` prints the demo cook's WhatsApp message (HI + EN), the cook link size, the Zepto order prompt, shop lists and cost estimate — handy when changing kitchen logic.
 - Text-to-speech and YouTube links depend on the phone: listen buttons hide themselves where the browser has no speech support (e.g. inside the Claude app's page viewer).

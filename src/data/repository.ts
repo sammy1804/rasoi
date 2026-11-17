@@ -5,6 +5,7 @@ import { SEED_PLAN, toSpec } from './mealPlanSeed'
 import { commit, emptyDB, getDB, replaceDB, setSessionUserId } from './store'
 import { weekdayOf } from '@/lib/dates'
 import type {
+  ActivityLog,
   Cook,
   CookAccount,
   CookHouse,
@@ -30,6 +31,7 @@ import type {
   RecipeIngredient,
   SharingSettings,
   Weekday,
+  Workout,
 } from './types'
 import { MEAL_SLOTS } from './types'
 
@@ -323,6 +325,33 @@ export function clearPlanLog(userId: ID, date: ISODate, mealItemId: ID) {
 export function setChoice(userId: ID, date: ISODate, mealItemId: ID, altIndex: number) {
   commit((d) => {
     d.choices[choiceKey(userId, date, mealItemId)] = { userId, date, mealItemId, altIndex }
+  })
+}
+
+export function activityFor(db: DB, userId: ID, date: ISODate): ActivityLog | undefined {
+  return db.activityLogs?.[waterKey(userId, date)]
+}
+
+export function setSteps(userId: ID, date: ISODate, steps: number) {
+  commit((d) => {
+    const k = waterKey(userId, date)
+    const cur = d.activityLogs[k] ?? { userId, date, steps: 0, workouts: [] }
+    d.activityLogs[k] = { ...cur, steps: Math.max(0, Math.min(100000, Math.round(steps))) }
+  })
+}
+
+export function addWorkout(userId: ID, date: ISODate, w: Omit<Workout, 'id'>) {
+  commit((d) => {
+    const k = waterKey(userId, date)
+    const cur = d.activityLogs[k] ?? { userId, date, steps: 0, workouts: [] }
+    d.activityLogs[k] = { ...cur, workouts: [...cur.workouts, { ...w, id: uid('wo'), minutes: Math.max(1, Math.min(600, Math.round(w.minutes))) }] }
+  })
+}
+
+export function removeWorkout(userId: ID, date: ISODate, workoutId: ID) {
+  commit((d) => {
+    const cur = d.activityLogs[waterKey(userId, date)]
+    if (cur) cur.workouts = cur.workouts.filter((w) => w.id !== workoutId)
   })
 }
 

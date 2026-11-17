@@ -186,6 +186,26 @@ function populateDemo(db: DB): { householdId: string; userId: string } {
     }
   }
 
+  // movement: Samridhi trains on weekdays, Naina does yoga a few times a week
+  const move = mulberry32(7)
+  for (let back = 13; back >= 0; back--) {
+    const date = addDays(today, -back)
+    const wd = weekdayOf(date)
+    const part = back === 0 ? 0.4 : 1 // today is only part-way through
+    db.activityLogs[waterKey(s.userId, date)] = {
+      userId: s.userId,
+      date,
+      steps: Math.round(((wd < 5 ? 6200 : 4800) + move() * 3600) * part / 100) * 100,
+      workouts: wd < 5 ? [{ id: `wo_s${back}`, type: 'calisthenics', minutes: 45, effort: move() < 0.5 ? 'hard' : 'moderate' }] : move() < 0.4 ? [{ id: `wo_s${back}`, type: 'walk', minutes: 40, effort: 'moderate' }] : [],
+    }
+    db.activityLogs[waterKey(n.userId, date)] = {
+      userId: n.userId,
+      date,
+      steps: Math.round((3200 + move() * 3400) * part / 100) * 100,
+      workouts: [1, 3, 5].includes(wd) && back !== 0 ? [{ id: `wo_n${back}`, type: 'yoga', minutes: 30, effort: 'moderate' }] : [],
+    }
+  }
+
   // weekly weigh-ins
   const sw = [56.9, 56.8, 56.5, 56.4, 56.2, 56.0]
   const nw = [39.2, 39.3, 39.5, 39.4, 39.7, 40.0]

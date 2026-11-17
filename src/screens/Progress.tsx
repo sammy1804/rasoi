@@ -13,6 +13,7 @@ import type { HouseholdMember, WeightLog } from '@/data/types'
 import { useSession } from '@/hooks/useSession'
 import { WEEKDAY_SHORT, addDays, daysBetween, fmtShortDate, fromISO, startOfWeek, todayISO, weekDates } from '@/lib/dates'
 import { weekReview } from '@/lib/summary'
+import { usualActiveKcal } from '@/lib/fitness'
 import { DailyBars, LineChart, MacroBar, MealGrid } from '@/components/charts'
 import { fmtNum } from '@/lib/utils'
 
@@ -30,12 +31,16 @@ export function ProgressScreen() {
   const dates = weekDates(weekStart)
   const r = useMemo(() => weekReview(db, who, dates), [db, who, weekStart])
   const thisWeek = weekStart === startOfWeek(todayISO())
+  /** the calorie target moved on at least one day this week */
+  const adjusts = r.daily.some((d) => d.target !== who.profile.calorieTarget)
   const sh = who.sharing
   const canCal = isMine || sh.calories
   const canPro = isMine || sh.protein
   const canMeals = isMine || sh.mealCompletion || sh.fullLog
   const canFoods = isMine || sh.fullLog
-  const [trendMetric, setTrendMetric] = useState<'protein' | 'kcal'>('protein')
+  const [trendMetric, setTrendMetric] = useState<'protein' | 'kcal' | 'steps'>('protein')
+  const stepGoal = who.profile.stepGoal ?? 8000
+  const usual = usualActiveKcal(who.profile)
 
   // Both people's protein as % of their own target (one shared axis, no dual scales).
   const together = useMemo(() => {
@@ -58,6 +63,7 @@ export function ProgressScreen() {
       labels: starts.map((st) => fmtShortDate(st)),
       protein: reviews.map((x) => (x.loggedDays ? x.avgProtein : null)),
       kcal: reviews.map((x) => (x.loggedDays ? x.avgKcal : null)),
+      steps: reviews.map((x) => (x.movementDays ? x.avgSteps : null)),
     }
   }, [db, who, weekStart])
 
@@ -112,7 +118,7 @@ export function ProgressScreen() {
       ) : (
         <motion.div key={`${weekStart}${whoId}`} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="mt-4 space-y-3">
           <div className="grid grid-cols-2 gap-2">
-            {canCal && <Tile label="Avg calories" value={fmtNum(r.avgKcal)} sub={`target ${fmtNum(who.profile.calorieTarget)}`} />}
+            {canCal && <Tile label="Avg calories" value={fmtNum(r.avgKcal)} sub={`target ${fmtNum(who.profile.calorieTarget)}${adjusts ? ', moves with activity' : ''}`} />}
             {canPro && <Tile label="Avg protein" value={`${Math.round(r.avgProtein)} g`} sub={`target ${who.profile.proteinMin}–${who.profile.proteinTarget} g`} />}
             {canPro && <Tile label="Protein days" value={`${r.proteinDays} / ${r.loggedDays}`} sub={`days at ${who.profile.proteinMin} g or more`} />}
             {canMeals && <Tile label="Meals completed" value={`${r.mealsCompleted}`} sub={`of ${r.mealsPossible} so far`} />}
@@ -124,6 +130,8 @@ export function ProgressScreen() {
               />
             )}
             {canFoods && <Tile label="Veg variety" value={`${r.veg.length}`} sub={`different vegetables${r.fruit.length ? ` · ${r.fruit.length} fruits` : ''}`} />}
+            {canCal && r.movementDays > 0 && <Tile label="Avg steps" value={fmtNum(r.avgSteps)} sub={`${r.stepGoalDays} of ${r.movementDays} days at ${fmtNum(stepGoal)}+`} />}
+            {canCal && r.movementDays > 0 && <Tile label="Workouts" value={`${r.workouts}`} sub={`${fmtNum(r.workoutMinutes)} min · about ${fmtNum(r.avgActive)} kcal active a day`} />}
           </div>
 
           {canCal && (
@@ -133,8 +141,31 @@ export function ProgressScreen() {
               days={r.daily.map((d) => ({ value: d.kcal, logged: d.logged }))}
               target={who.profile.calorieTarget}
               band={[0.9, 1.1]}
+              targets={adjusts ? r.daily.map((d) => d.target) : undefined}
               unit="kcal"
               barClass="bg-ink/80"
+              footer={adjusts ? 'Each day’s target follows how active that day was, so the line moves. Solid bars landed within 10% of it.' : undefined}
+            />
+          )}
+          {canCal && r.movementDays > 0 && (
+            <DailyBars
+              title="Steps per day"
+              testId="chart-steps"
+              days={r.daily.map((d) => ({ value: d.steps, logged: d.steps > 0 }))}
+              target={stepGoal}
+              unit="steps"
+              barClass="bg-chart-2"
+            />
+          )}
+          {canCal && r.movementDays > 0 && (
+            <DailyBars
+              title="Calories burned by moving"
+              testId="chart-active"
+              days={r.daily.map((d) => ({ value: d.active, logged: d.active > 0 }))}
+              target={usual}
+              unit="kcal"
+              barClass="bg-chart-3"
+              footer={`Steps plus workouts, above resting. The dashed line is the usual day your ${fmtNum(who.profile.calorieTarget)} kcal target assumes. Estimates.`}
             />
           )}
           {canPro && (
@@ -170,18 +201,25 @@ export function ProgressScreen() {
                 value={trendMetric}
                 onChange={setTrendMetric}
                 options={[
-                  { value: 'protein', label: 'Protein trend' },
-                  ...(canCal ? [{ value: 'kcal' as const, label: 'Calorie trend' }] : []),
+                  { value: 'protein', label: 'Protein' },
+                  ...(canCal ? [{ value: 'kcal' as const, label: 'Calories' }] : []),
+                  ...(canCal && trend.steps.some((x) => x !== null) ? [{ value: 'steps' as const, label: 'Steps' }] : []),
                 ]}
               />
               <LineChart
                 title="Last 4 weeks · daily average"
                 testId="chart-trend"
                 labels={trend.labels}
-                series={[{ name: trendMetric === 'protein' ? 'Protein' : 'Calories', values: trendMetric === 'protein' ? trend.protein : trend.kcal, color: trendMetric === 'protein' ? 'rgb(var(--c1))' : 'rgb(var(--ink))' }]}
-                refLine={trendMetric === 'protein' ? who.profile.proteinMin : who.profile.calorieTarget}
-                refLabel={trendMetric === 'protein' ? `${who.profile.proteinMin} g` : `${fmtNum(who.profile.calorieTarget)} kcal`}
-                format={(v) => (trendMetric === 'protein' ? `${Math.round(v)} g` : `${fmtNum(v)} kcal`)}
+                series={[
+                  trendMetric === 'protein'
+                    ? { name: 'Protein', values: trend.protein, color: 'rgb(var(--c1))' }
+                    : trendMetric === 'kcal'
+                      ? { name: 'Calories', values: trend.kcal, color: 'rgb(var(--ink))' }
+                      : { name: 'Steps', values: trend.steps, color: 'rgb(var(--c2))' },
+                ]}
+                refLine={trendMetric === 'protein' ? who.profile.proteinMin : trendMetric === 'kcal' ? who.profile.calorieTarget : stepGoal}
+                refLabel={trendMetric === 'protein' ? `${who.profile.proteinMin} g` : trendMetric === 'kcal' ? `${fmtNum(who.profile.calorieTarget)} kcal` : `${fmtNum(stepGoal)} steps`}
+                format={(v) => (trendMetric === 'protein' ? `${Math.round(v)} g` : trendMetric === 'kcal' ? `${fmtNum(v)} kcal` : `${fmtNum(v)} steps`)}
               />
             </div>
           )}

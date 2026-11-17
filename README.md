@@ -52,6 +52,10 @@ Or tap **Try demo** on the welcome screen. It loads Samridhi and Naina with two 
 
 Tap **Add food** (or the camera on any meal) and tell Rasoi what you ate: "2 roti, 1 katori dal and half a cup of rice", "skipped breakfast, had poha and chai instead" — in English, Hinglish or Hindi. It works out the foods and amounts, you confirm, and the planned items you didn't eat can be marked skipped in the same step. Talking uses your phone's speech recognition. Photos are kept with the meal; when you open Rasoi from the Claude link, Claude also reads the photo and works out what's on the plate by itself.
 
+## Steps and workouts
+
+Add the day's steps and workouts from the movement card on Home (type them, or say "8,000 steps and 45 min yoga"). Rasoi estimates the calories burned and lets your calorie target follow the day: a more active day adds calories, a quieter one takes a little off, by at most 250 kcal. Today's target only ever goes up as you move. Progress shows steps, calories burned and calories eaten against each day's own target. You can switch the adjustment off in Profile.
+
 ## Kitchen: cook, groceries, budget
 
 - **Your cook** (Week → Cook, or during onboarding): name, WhatsApp number, Hindi or English, when they come and which meals, regular day off. Mark days they're not coming; Home shows it.

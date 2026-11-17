@@ -11,8 +11,9 @@
     "plan:totals": "tsx --tsconfig tsconfig.json scripts/plan-totals.ts",
     "build:mobile": "tsc --noEmit -p . && vite build --mode artifact",
     "preview:mobile": "vite preview --outDir dist-mobile --port 4174",
-    "smoke": "npm run check:understand && npm run build && npm run build:mobile && node scripts/smoke.cjs",
-    "check:understand": "tsx --tsconfig tsconfig.json scripts/understand-check.ts"
+    "smoke": "npm run check:understand && npm run check:fitness && npm run build && npm run build:mobile && node scripts/smoke.cjs",
+    "check:understand": "tsx --tsconfig tsconfig.json scripts/understand-check.ts",
+    "check:fitness": "tsx --tsconfig tsconfig.json scripts/fitness-check.ts"
   },
   "dependencies": {
     "@fontsource-variable/fraunces": "^5.3.0",

@@ -68,7 +68,7 @@ export function LogScreen() {
         <div className="mt-2 grid grid-cols-5 gap-1 text-center">
           {(
             [
-              ['kcal', t.kcal, '', `of ${fmtNum(me.profile.calorieTarget)}`],
+              ['kcal', t.kcal, '', `of ${fmtNum(view.target.target)}`],
               ['protein', t.protein, 'g', `of ${me.profile.proteinTarget}`],
               ['carbs', t.carbs, 'g', ''],
               ['fat', t.fat, 'g', ''],

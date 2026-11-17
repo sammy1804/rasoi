@@ -37,6 +37,7 @@ export function emptyDB(): DB {
     spendLogs: {},
     cookAccounts: {},
     cookHouses: {},
+    activityLogs: {},
   }
 }
 

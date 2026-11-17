@@ -1,10 +1,11 @@
 import { AnimatePresence, motion, type PanInfo } from 'framer-motion'
-import { ArrowLeftRight, Camera, Check, ChefHat, Droplet, MessageCircle, Eye, Lock, Minus, Pencil, Plus, Sparkles, UserPlus, X } from 'lucide-react'
+import { ArrowLeftRight, Camera, Check, ChefHat, Droplet, Flame, Footprints, MessageCircle, Eye, Lock, Minus, Pencil, Plus, Sparkles, UserPlus, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useDay } from '@/app/DayContext'
 import { SLOT_META, hueOf, slotForNow } from '@/app/meta'
 import { AddFoodSheet } from '@/components/AddFoodSheet'
+import { ActivitySheet } from '@/components/ActivitySheet'
 import { SayItSheet } from '@/components/SayItSheet'
 import { getPhoto } from '@/data/photos'
 import { Avatar } from '@/components/Avatar'
@@ -14,7 +15,8 @@ import { StatusCheck } from '@/components/StatusCheck'
 import { useToast } from '@/components/Toast'
 import { Button } from '@/components/ui/button'
 import { ProgressBar } from '@/components/ui/progress'
-import { allFoods, clearPlanLog, cookIsOff, markTip, setWater, upsertLog } from '@/data/repository'
+import { activityFor, allFoods, clearPlanLog, cookIsOff, markTip, setWater, upsertLog } from '@/data/repository'
+import { targetNote, workoutKind } from '@/lib/fitness'
 import { buildCookDay, cookMessage, fmtTime, whatsappUrl } from '@/lib/kitchen'
 import type { Cook, FoodLog, HouseholdMember, ISODate, MealSlot } from '@/data/types'
 import { useSession } from '@/hooks/useSession'
@@ -35,6 +37,7 @@ export function HomeScreen() {
   const [target, setTarget] = useState<LogTarget | null>(null)
   const [adding, setAdding] = useState<{ slot?: MealSlot } | null>(null)
   const [say, setSay] = useState<{ slot?: MealSlot; photos?: File[] } | null>(null)
+  const [moving, setMoving] = useState(false)
 
   const me = member!
   const viewing: HouseholdMember = (viewUserId && partner && viewUserId === partner.userId ? partner : me) ?? me
@@ -209,7 +212,7 @@ export function HomeScreen() {
               {showCalories || showProtein ? (
                 <div className="grid grid-cols-2 gap-5">
                   {showCalories ? (
-                    <Metric label="Calories" value={view.totals.kcal} target={viewing.profile.calorieTarget} unit="kcal" testId="metric-kcal" />
+                    <Metric label="Calories" value={view.totals.kcal} target={view.target.target} unit="kcal" testId="metric-kcal" />
                   ) : (
                     <Hidden label="Calories" />
                   )}
@@ -224,12 +227,19 @@ export function HomeScreen() {
                   <Lock size={14} /> {viewingName} keeps their numbers private.
                 </p>
               )}
+              {showCalories && view.target.adjust !== 0 && (
+                <p className="mt-3 flex items-center gap-1.5 text-[12px] text-ink-mute" data-testid="target-note">
+                  <Flame size={12} className="text-clay" /> {targetNote(view.target)}
+                </p>
+              )}
               {ramp && viewing.profile.breakfastRamp.enabled && (
                 <p className="mt-3 flex items-center gap-1.5 text-[12px] text-ink-mute">
                   <Sparkles size={12} className="text-meal-breakfast" /> {ramp}
                 </p>
               )}
             </section>
+
+            {showCalories && <MovementCard view={view} member={viewing} readOnly={!isMine} onOpen={() => setMoving(true)} />}
 
             {activeTip && activeTip !== 'firstTick' && (
               <CoachCard
@@ -304,6 +314,7 @@ export function HomeScreen() {
       )}
 
       <LogSheet target={target} member={me} onClose={() => setTarget(null)} />
+      <ActivitySheet open={moving} onClose={() => setMoving(false)} member={me} date={date} />
       <SayItSheet open={!!say} onClose={() => setSay(null)} member={me} date={date} defaultSlot={say?.slot} initialPhotos={say?.photos} onBrowse={() => setAdding({ slot: say?.slot })} />
       <AddFoodSheet
         open={!!adding}
@@ -320,6 +331,60 @@ export function HomeScreen() {
 }
 
 /* ——————————————— Pieces ——————————————— */
+
+function MovementCard({ view, member, readOnly, onOpen }: { view: DayView; member: HouseholdMember; readOnly: boolean; onOpen: () => void }) {
+  const { db } = useSession()
+  const a = view.target.active
+  const goal = member.profile.stepGoal ?? 8000
+  const workouts = activityFor(db, member.userId, view.date)?.workouts ?? []
+  const empty = a.steps === 0 && workouts.length === 0
+  if (readOnly && empty) return null
+  return (
+    <button
+      onClick={readOnly ? undefined : onOpen}
+      disabled={readOnly}
+      className="mt-3 block w-full rounded-2xl border border-line/80 bg-card px-4 py-3 text-left transition enabled:hover:border-ink/20 focus-ring"
+      data-testid="movement-card"
+      aria-label="Movement: steps and workouts"
+    >
+      {empty ? (
+        <span className="flex items-center gap-3">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-sand text-ink-soft">
+            <Footprints size={17} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[14px] font-semibold">Add steps and workouts</span>
+            <span className="block truncate text-[12px] text-ink-mute">Your calories follow how active the day was</span>
+          </span>
+          <Plus size={18} className="text-ink-mute" />
+        </span>
+      ) : (
+        <>
+          <span className="flex items-baseline justify-between gap-3">
+            <span className="flex items-baseline gap-1.5">
+              <Footprints size={15} className="self-center text-ink-soft" />
+              <span className="font-display text-[22px] font-medium leading-none tabular">{fmtNum(a.steps)}</span>
+              <span className="text-[12px] font-semibold text-ink-mute">/ {fmtNum(goal)} steps</span>
+            </span>
+            <span className="flex items-baseline gap-1 text-[13px] font-semibold tabular">
+              <Flame size={14} className="self-center text-clay" /> {fmtNum(a.total)} <span className="font-medium text-ink-mute">kcal active</span>
+            </span>
+          </span>
+          <ProgressBar value={a.steps} max={goal} className="mt-2 h-1.5" barClassName="bg-chart-2" />
+          {workouts.length > 0 && (
+            <span className="mt-2 flex flex-wrap gap-1.5">
+              {workouts.map((w) => (
+                <span key={w.id} className="inline-flex items-center gap-1 rounded-full bg-sand px-2 py-0.5 text-[12px] font-semibold text-ink-soft">
+                  <span aria-hidden>{workoutKind(w.type).emoji}</span> {workoutKind(w.type).label} · {w.minutes} min
+                </span>
+              ))}
+            </span>
+          )}
+        </>
+      )}
+    </button>
+  )
+}
 
 function KitchenStrip({ cook, date }: { cook: Cook; date: ISODate }) {
   const { db } = useSession()
@@ -606,7 +671,7 @@ function DailySummary({ view, member, isMine, showCalories, showProtein }: { vie
     <section className="mt-8 rounded-3xl bg-sand/60 p-4" aria-label="Daily summary" data-testid="daily-summary">
       <h2 className="mb-3 px-1 text-[13px] font-semibold uppercase tracking-[0.12em] text-ink-mute">Daily summary</h2>
       <dl className="grid grid-cols-2 gap-2">
-        {showCalories && <Stat label="Calories" value={`${fmtNum(view.totals.kcal)} / ${fmtNum(p.calorieTarget)}`} />}
+        {showCalories && <Stat label="Calories" value={`${fmtNum(view.totals.kcal)} / ${fmtNum(view.target.target)}`} />}
         {showProtein && <Stat label="Protein" value={`${Math.round(view.totals.protein)} / ${p.proteinTarget} g`} />}
         <Stat label="Meals completed" value={`${view.mealsDone} / 4`} />
         <Stat label="Fruit & veg" value={`${fmtAmount(Math.round(view.fv * 2) / 2)} serving${view.fv >= 1.5 || view.fv === 0 ? 's' : ''}`} />
