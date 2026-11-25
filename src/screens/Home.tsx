@@ -5,6 +5,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useDay } from '@/app/DayContext'
 import { SLOT_META, hueOf, slotForNow } from '@/app/meta'
 import { AddFoodSheet } from '@/components/AddFoodSheet'
+import { InstallCard } from '@/components/AppSheets'
 import { ActivitySheet } from '@/components/ActivitySheet'
 import { SayItSheet } from '@/components/SayItSheet'
 import { getPhoto } from '@/data/photos'
@@ -240,6 +241,8 @@ export function HomeScreen() {
             </section>
 
             {showCalories && <MovementCard view={view} member={viewing} readOnly={!isMine} onOpen={() => setMoving(true)} />}
+
+            {isMine && date === todayISO() && !activeTip && <InstallCard />}
 
             {activeTip && activeTip !== 'firstTick' && (
               <CoachCard

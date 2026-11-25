@@ -1,7 +1,8 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { ArrowLeft, ArrowRight, Check, ChefHat, Home as HomeIcon, Link2, Sparkles, Users } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, ChefHat, ClipboardPaste, Home as HomeIcon, Link2, Sparkles, Users } from 'lucide-react'
 import { useMemo, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { DataSheet } from '@/components/AppSheets'
 import { Avatar } from '@/components/Avatar'
 import { Button } from '@/components/ui/button'
 import { Chip } from '@/components/ui/chip'
@@ -634,6 +635,8 @@ function Welcome({
   onContinue: (userId: string) => void
 }) {
   const existingName = people.length > 0
+  const [bringing, setBringing] = useState(false)
+  const navigate = useNavigate()
   return (
     <div className="flex flex-1 flex-col pt-safe">
       <div className="flex items-center justify-between pt-6">
@@ -692,7 +695,19 @@ function Welcome({
             <ChefHat size={17} /> मैं कुक हूँ
           </Button>
         </div>
+        <button onClick={() => setBringing(true)} className="mx-auto flex items-center gap-1.5 rounded-full px-3 py-2 text-[14px] font-semibold text-ink-soft hover:bg-sand hover:text-ink focus-ring">
+          <ClipboardPaste size={15} /> Bring my data
+          <span className="font-normal text-ink-mute">from another copy</span>
+        </button>
       </div>
+      <DataSheet
+        open={bringing}
+        onClose={() => setBringing(false)}
+        onDone={(d) => {
+          setBringing(false)
+          if (d.userId) navigate('/', { replace: true })
+        }}
+      />
     </div>
   )
 }

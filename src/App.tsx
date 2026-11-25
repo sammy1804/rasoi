@@ -2,6 +2,7 @@ import { motion } from 'framer-motion'
 import { HashRouter, MemoryRouter, Navigate, Outlet, Route, Routes, useLocation, useParams } from 'react-router-dom'
 import { DayProvider } from '@/app/DayContext'
 import { IS_MOBILE_PAGE } from '@/app/target'
+import { UpdateBanner } from '@/components/AppSheets'
 import { BottomNav } from '@/components/BottomNav'
 import { ToastProvider } from '@/components/Toast'
 import { useSession } from '@/hooks/useSession'
@@ -51,6 +52,7 @@ export function App() {
   return (
     <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <ToastProvider>
+        <UpdateBanner />
         <DayProvider>
           <Routes>
             <Route path="/welcome" element={<Onboarding />} />

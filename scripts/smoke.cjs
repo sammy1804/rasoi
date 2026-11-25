@@ -388,6 +388,83 @@ function expect(cond, msg) {
       }
     })
 
+    // The public site as a home-screen app: manifest, install steps, service worker, opens offline.
+    await step('Public site installs: manifest, install steps, works offline', async () => {
+      const web = await startServer('dist', 4177)
+      try {
+        const c = await browser.newContext({ ...devices['iPhone 13'] })
+        const p = await c.newPage()
+        watch(p)
+        const m = await (await p.request.get('http://localhost:4177/manifest.webmanifest')).json()
+        expect(m.display === 'standalone' && m.icons.some((i) => i.sizes === '512x512') && m.start_url, 'manifest not installable')
+        for (const f of ['icon-192.png', 'icon-512.png', 'apple-touch-icon.png', 'sw.js']) {
+          expect((await p.request.get('http://localhost:4177/' + f)).ok(), `${f} missing`)
+        }
+        await p.goto('http://localhost:4177/')
+        await p.waitForFunction(() => !!navigator.serviceWorker && !!navigator.serviceWorker.controller, null, { timeout: 15000 })
+        await p.getByRole('button', { name: 'Try demo' }).click()
+        await p.getByRole('link', { name: 'Profile' }).click()
+        await p.getByRole('button', { name: /Add Rasoi to your home screen/ }).click()
+        await p.getByTestId('install-sheet').waitFor({ timeout: 5000 })
+        expect((await p.getByTestId('install-sheet').innerText()).includes('Add to Home Screen'), 'no iPhone install steps')
+        await p.getByRole('button', { name: 'Done' }).click()
+        await c.setOffline(true)
+        await p.reload()
+        await p.getByRole('link', { name: 'Home' }).click({ timeout: 8000 })
+        await p.getByTestId('home-date').waitFor({ timeout: 8000 })
+        await c.close()
+      } finally {
+        stop(web)
+      }
+    })
+
+    // Moving data from the Claude phone page into the app (different storage, as on iPhone).
+    await step('Copy my data on the phone page, bring it into the app, put back previous data', async () => {
+      const web = await startServer('dist', 4178)
+      try {
+        const perms = { permissions: ['clipboard-read', 'clipboard-write'] }
+        const a = await browser.newContext({ ...devices['iPhone 13'], ...perms })
+        const ap = await a.newPage()
+        watch(ap)
+        await ap.goto(URL)
+        await ap.getByRole('button', { name: 'Try demo' }).click()
+        await ap.getByRole('link', { name: 'Profile' }).click()
+        await ap.getByRole('button', { name: /Copy my data/ }).click()
+        await ap.waitForTimeout(500)
+        const data = await ap.evaluate(() => navigator.clipboard.readText())
+        expect(data.startsWith('rasoi-data:'), 'nothing copied')
+        const logs = await ap.evaluate(() => Object.keys(JSON.parse(localStorage.getItem('rasoi:db:v1')).foodLogs).length)
+
+        const b = await browser.newContext({ ...devices['iPhone 13'] })
+        const bp = await b.newPage()
+        watch(bp)
+        await bp.goto('http://localhost:4178/')
+        await bp.getByRole('button', { name: /Bring my data/ }).click()
+        await bp.getByLabel('Your copied data').fill('Here you go:\n' + data)
+        await bp.getByTestId('data-found').waitFor({ timeout: 5000 })
+        expect((await bp.getByTestId('data-found').innerText()).includes('Samridhi'), 'preview does not show the people')
+        await bp.getByRole('button', { name: 'Bring it in' }).click()
+        await bp.getByTestId('home-date').waitFor({ timeout: 8000 })
+        const got = await bp.evaluate(() => Object.keys(JSON.parse(localStorage.getItem('rasoi:db:v1')).foodLogs).length)
+        expect(got === logs && logs > 0, `logs moved: ${got} of ${logs}`)
+        // anything that replaces the data keeps the old copy, and it can be put back
+        await bp.getByRole('link', { name: 'Profile' }).click()
+        await bp.getByRole('button', { name: /Reset all data/ }).click()
+        await bp.getByRole('button', { name: 'Delete everything' }).click()
+        await bp.getByRole('button', { name: 'Try demo' }).click()
+        await bp.getByRole('link', { name: 'Profile' }).click()
+        await bp.getByRole('button', { name: /Put back the previous data/ }).click()
+        await bp.getByRole('button', { name: 'Put it back' }).click()
+        await bp.getByTestId('home-date').waitFor({ timeout: 8000 })
+        const back = await bp.evaluate(() => Object.keys(JSON.parse(localStorage.getItem('rasoi:db:v1')).users).length)
+        expect(back > 0, 'previous data not restored')
+        await a.close()
+        await b.close()
+      } finally {
+        stop(web)
+      }
+    })
+
     await step('No console errors', async () => expect(errors.length === 0, errors.slice(0, 3).join(' | ')))
   } finally {
     await browser.close()

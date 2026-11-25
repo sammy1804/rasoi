@@ -10,6 +10,13 @@ A shared 7-day meal planner and food tracker for two people who live together. Y
 
 Your data stays on your phone. Light and dark themes follow the phone's setting.
 
+### Put it on your home screen
+
+- **iPhone:** open the link in Safari → Share → **Add to Home Screen** → Add.
+- **Android:** open it in Chrome → **Install Rasoi** (or ⋮ → Install app).
+
+It opens full screen from its own icon, works offline, and updates itself: after a new version is pushed you'll see **Update** at the top. On iPhone the home-screen app keeps its own data, so use **Profile → Copy my data** in the old copy and **Bring my data** in the new one. Anything that replaces your data (demo, reset, import) keeps the previous copy: **Profile → Put back the previous data**.
+
 ## Run it
 
 ```bash

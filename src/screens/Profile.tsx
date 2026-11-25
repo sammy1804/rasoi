@@ -1,5 +1,5 @@
-import { ChevronRight, Copy, Info, LogOut, Pencil, RefreshCw, Repeat, Sparkles, Trash2, UserPlus } from 'lucide-react'
-import { useEffect, useState, type ReactNode } from 'react'
+import { ChevronRight, ClipboardCopy, ClipboardPaste, Copy, Info, LogOut, Pencil, RefreshCw, Repeat, RotateCcw, Smartphone, Sparkles, Trash2, UserPlus } from 'lucide-react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useDay } from '@/app/DayContext'
 import { Avatar } from '@/components/Avatar'
@@ -11,6 +11,9 @@ import { Sheet } from '@/components/ui/sheet'
 import { Stepper } from '@/components/ui/stepper'
 import { Switch } from '@/components/ui/switch'
 import { buildDemo } from '@/data/demo'
+import { getBackup, restoreBackup } from '@/data/store'
+import { DataSheet, InstallSheet, useCopyData } from '@/components/AppSheets'
+import { useInstall } from '@/lib/install'
 import { resetAll, resetTips, signOut, switchUser, updateHouseholdName, updateProfile, updateSharing, updateUserName } from '@/data/repository'
 import type { Diet, Goal, PortionStyle, Profile } from '@/data/types'
 import { useSession } from '@/hooks/useSession'
@@ -23,10 +26,10 @@ import { DislikePicker } from './Onboarding'
 const GOAL_LABEL: Record<Goal, string> = { lose: 'Lose weight gradually', maintain: 'Maintain', gain: 'Gain weight gradually' }
 const DIET_LABEL: Record<Diet, string> = { veg: 'Vegetarian', 'egg-whites': 'Veg + egg whites', eggs: 'Veg + eggs', 'non-veg': 'Non-veg' }
 
-type SheetKind = null | 'name' | 'targets' | 'body' | 'food' | 'household' | 'demo' | 'reset' | 'leave'
+type SheetKind = null | 'name' | 'targets' | 'body' | 'food' | 'household' | 'demo' | 'reset' | 'leave' | 'install' | 'data' | 'restore'
 
 export function ProfileScreen() {
-  const { member, user, household, members, partner, nameOf } = useSession()
+  const { member, user, household, members, partner, nameOf, db } = useSession()
   const me = member!
   const p = me.profile
   const [sheet, setSheet] = useState<SheetKind>(null)
@@ -40,6 +43,10 @@ export function ProfileScreen() {
   }, [hash])
 
   const patch = (x: Partial<Profile>) => updateProfile(me.id, x)
+  const { standalone } = useInstall()
+  const { copy } = useCopyData()
+  const backup = useMemo(() => getBackup(), [db])
+  const backupWhen = backup ? new Date(backup.at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) : ''
   const partnerName = partner ? nameOf(partner.userId) : 'your person'
 
   return (
@@ -187,6 +194,18 @@ export function ProfileScreen() {
         />
       </Section>
 
+      <Section id="app" title="App on your phone">
+        <ActionRow
+          icon={<Smartphone size={17} />}
+          label={standalone && !IS_MOBILE_PAGE ? 'Rasoi is on your home screen' : 'Add Rasoi to your home screen'}
+          sub={standalone && !IS_MOBILE_PAGE ? 'It updates itself and works offline' : 'An app icon that opens full screen and updates itself'}
+          onClick={() => setSheet('install')}
+        />
+        <ActionRow icon={<ClipboardCopy size={17} />} label="Copy my data" sub="To move it into the app or onto another phone" onClick={copy} />
+        <ActionRow icon={<ClipboardPaste size={17} />} label="Bring my data" sub="Paste data copied from another copy of Rasoi" onClick={() => setSheet('data')} />
+        {backup && <ActionRow icon={<RotateCcw size={17} />} label="Put back the previous data" sub={`What was here before the last demo, reset or import · ${backupWhen}`} onClick={() => setSheet('restore')} />}
+      </Section>
+
       <Section title="Demo & data">
         <ActionRow icon={<RefreshCw size={17} />} label="Load demo household" sub="Samridhi & Naina with two weeks of history" onClick={() => setSheet('demo')} />
         <ActionRow icon={<Trash2 size={17} />} label="Reset all data" sub="Start again from the welcome screen" danger onClick={() => setSheet('reset')} />
@@ -207,7 +226,7 @@ export function ProfileScreen() {
         open={sheet === 'demo'}
         onClose={() => setSheet(null)}
         title="Load the demo household?"
-        body="This replaces everything stored in this browser with a demo of Samridhi and Naina, including two weeks of logs and weigh-ins."
+        body="This replaces everything stored in this browser with a demo of Samridhi and Naina, including two weeks of logs and weigh-ins. Your own data is kept aside: Profile → “Put back the previous data” brings it back."
         confirm="Load demo"
         onConfirm={() => {
           buildDemo()
@@ -217,11 +236,36 @@ export function ProfileScreen() {
           toast({ text: 'Demo loaded — you’re Samridhi' })
         }}
       />
+      <InstallSheet open={sheet === 'install'} onClose={() => setSheet(null)} />
+      <DataSheet
+        open={sheet === 'data'}
+        onClose={() => setSheet(null)}
+        onDone={(d) => {
+          setSheet(null)
+          setViewUserId(null)
+          setDate(todayISO())
+          navigate(d.userId ? '/' : '/welcome')
+        }}
+      />
+      <ConfirmSheet
+        open={sheet === 'restore'}
+        onClose={() => setSheet(null)}
+        title="Put back the previous data?"
+        body={`This brings back what was on this phone before the last demo, reset or import (saved ${backupWhen}). What’s here now is kept, so you can swap back.`}
+        confirm="Put it back"
+        onConfirm={() => {
+          restoreBackup()
+          setViewUserId(null)
+          setDate(todayISO())
+          navigate('/')
+          toast({ text: 'Your previous data is back' })
+        }}
+      />
       <ConfirmSheet
         open={sheet === 'reset'}
         onClose={() => setSheet(null)}
         title="Reset all data?"
-        body="This deletes the household, both profiles, the plan and every log stored in this browser. It can’t be undone."
+        body="This clears the household, both profiles, the plan and every log stored in this browser. One copy is kept aside, so “Put back the previous data” can still bring it back."
         confirm="Delete everything"
         danger
         onConfirm={() => {

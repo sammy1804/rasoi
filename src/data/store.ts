@@ -15,6 +15,8 @@ import type { DB } from './types'
 const DB_KEY = 'rasoi:db:v1'
 const SESSION_KEY = 'rasoi:session'
 const LAST_USER_KEY = 'rasoi:lastUser'
+/** The data as it was before the last full replace (demo, reset, import), so it can be put back. */
+const BACKUP_KEY = 'rasoi:db:backup'
 export const DB_VERSION = 1
 
 export function emptyDB(): DB {
@@ -96,9 +98,52 @@ export function commit(mutate: (draft: DB) => void) {
 }
 
 export function replaceDB(next: DB) {
+  if (Object.keys(db.users).length > 0 || Object.keys(db.cookAccounts).length > 0) {
+    safeSet(ls, BACKUP_KEY, JSON.stringify({ at: new Date().toISOString(), userId: sessionUserId, db }))
+  }
   db = next
   safeSet(ls, DB_KEY, JSON.stringify(db))
   emit()
+}
+
+export interface Backup {
+  at: string
+  userId: string | null
+  db: DB
+}
+
+/** The data from before the last replace, if any. */
+export function getBackup(): Backup | null {
+  const raw = safeGet(ls, BACKUP_KEY)
+  if (!raw) return null
+  try {
+    const b = JSON.parse(raw) as Backup
+    if (!b?.db || b.db.version !== DB_VERSION) return null
+    return { ...b, db: { ...emptyDB(), ...b.db } }
+  } catch {
+    return null
+  }
+}
+
+/** Swap the current data with the backup (so restoring can itself be undone). */
+export function restoreBackup(): boolean {
+  const b = getBackup()
+  if (!b) return false
+  const current = db
+  const currentUser = sessionUserId
+  db = b.db
+  safeSet(ls, DB_KEY, JSON.stringify(db))
+  if (Object.keys(current.users).length || Object.keys(current.cookAccounts).length) safeSet(ls, BACKUP_KEY, JSON.stringify({ at: new Date().toISOString(), userId: currentUser, db: current }))
+  else safeSet(ls, BACKUP_KEY, null)
+  setSessionUserId(b.userId && db.users[b.userId] ? b.userId : null)
+  return true
+}
+
+/** A DB from elsewhere (an export), made safe to load: right version, every table present. */
+export function normaliseDB(x: unknown): DB | null {
+  const d = x as DB
+  if (!d || typeof d !== 'object' || d.version !== DB_VERSION || typeof d.users !== 'object') return null
+  return { ...emptyDB(), ...d }
 }
 
 export function getSessionUserId(): string | null {

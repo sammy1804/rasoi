@@ -4,7 +4,7 @@ Shared 7-day meal planner + food tracker for two people (Samridhi and Naina). Re
 
 ## Where it runs
 
-- **Public site (share this):** https://sammy1804.github.io/rasoi/ — built from `dist/` by `.github/workflows/deploy.yml` on every push to the working branch. Anyone can open it; no Claude account needed. Hash-routed (`/#/join/CODE`, `/#/c/<menu>`), so it works on any static host. Needs GitHub Pages enabled once (repo Settings → Pages → Source: GitHub Actions).
+- **Public site (share this; install it from here):** https://sammy1804.github.io/rasoi/ — built from `dist/` by `.github/workflows/deploy.yml` on every push to the working branch. Anyone can open it; no Claude account needed. Added to the home screen it's the phone app and updates itself on each push. Hash-routed (`/#/join/CODE`, `/#/c/<menu>`), so it works on any static host. Needs GitHub Pages enabled once (repo Settings → Pages → Source: GitHub Actions).
 - **Claude phone page:** https://claude.ai/artifact/TeKtzRJc1CdJRGS2xTwDfK — built from `dist-mobile/index.html` (one self-contained file). Private to the user; routes in memory; links it generates point at the public site (`publicBase()` in `src/app/target.ts`).
 - The user often prompts from their phone. After **every** change they ask for, finish the loop below without waiting to be asked, so both are current.
 
@@ -84,6 +84,13 @@ Shared 7-day meal planner + food tracker for two people (Samridhi and Naina). Re
 - Paneer as bhurji / kadai / tikka / chilla topping / curd-cashew dip. Soy as keema / crispy chunks / cutlets.
 - Numbers are estimates — always say so; never medical advice. No guilt language. Don't encourage daily weighing.
 - Design: warm off-white, charcoal type, one muted terracotta accent, soft borders, mobile-first, one-hand use. Light and dark themes come from tokens in `src/index.css` — never hard-code a colour.
+
+## On the phone as an app
+
+- **Install** (`src/lib/install.ts`, `src/components/AppSheets.tsx`): the public site is a home-screen web app (manifest, `apple-touch-icon.png` 180px, maskable 512). Android/desktop Chrome: we keep `beforeinstallprompt` and show a real "Install Rasoi" button. iPhone has no prompt: Safari → Share → Add to Home Screen, shown as steps. Entry points: Home card (after the first-run tips, dismissible), Profile → "App on your phone". On the Claude page the same sheet walks through opening the public site in Safari.
+- **Updates**: `vite.config.ts` writes `dist/sw.js` at build time (version = hash of the built file names, precaches everything). Page = network first (4 s, then cache), hashed assets = cache first; `ignoreVary` is needed because the server sends `Vary: Origin`. A new version waits; `UpdateBanner` shows "Update" and posts `skip-waiting`, then the page reloads. A resumed home-screen app checks for a new version after 30 min away. No service worker on the Claude page.
+- **Moving data** (`src/lib/backup.ts`): on iPhone the home-screen app, Safari and the Claude page each have their own storage. "Copy my data" puts `rasoi-data:<deflated DB>` on the clipboard; "Bring my data" (welcome screen and Profile) finds it in pasted text, previews who/how many logs, and replaces. Photos aren't included.
+- **Nothing is lost by a replace**: `replaceDB` keeps the previous data under `rasoi:db:backup` (demo, reset, import). Profile → "Put back the previous data" swaps them (`restoreBackup`), so it can be undone too.
 
 ## Gotchas
 
